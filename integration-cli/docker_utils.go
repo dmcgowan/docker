@@ -154,6 +154,12 @@ func (d *Daemon) Start(arg ...string) error {
 
 			d.t.Log("daemon started")
 			return nil
+		case <-d.wait:
+			output, err := ioutil.ReadFile(d.logFile.Name())
+			if err != nil {
+				return fmt.Errorf("Daemon exited before it start serving requests. Error reading output from daemon: %s", err)
+			}
+			return fmt.Errorf("Daemon exited before it started serving requests. Output:\n%s", output)
 		}
 	}
 }
@@ -322,7 +328,10 @@ func deleteAllContainers() error {
 }
 
 func deleteImages(images ...string) error {
-	rmiCmd := exec.Command(dockerBinary, "rmi", strings.Join(images, " "))
+	args := make([]string, 1, 2)
+	args[0] = "rmi"
+	args = append(args, images...)
+	rmiCmd := exec.Command(dockerBinary, args...)
 	exitCode, err := runCommand(rmiCmd)
 	// set error manually if not set
 	if exitCode != 0 && err == nil {
@@ -351,11 +360,6 @@ func pullImageIfNotExist(image string) (err error) {
 		}
 	}
 	return
-}
-
-// deprecated, use dockerCmd instead
-func cmd(t *testing.T, args ...string) (string, int, error) {
-	return dockerCmd(t, args...)
 }
 
 func dockerCmd(t *testing.T, args ...string) (string, int, error) {

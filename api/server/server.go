@@ -3,7 +3,7 @@ package server
 import (
 	"bufio"
 	"bytes"
-
+	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"expvar"
@@ -17,9 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
-
-	"crypto/tls"
-	"crypto/x509"
 
 	"code.google.com/p/go.net/websocket"
 	"github.com/docker/libcontainer/user"
@@ -1016,6 +1013,9 @@ func postBuild(eng *engine.Engine, version version.Version, w http.ResponseWrite
 	} else {
 		job.Setenv("rm", r.FormValue("rm"))
 	}
+	if r.FormValue("pull") == "1" && version.GreaterThanOrEqualTo("1.16") {
+		job.Setenv("pull", "1")
+	}
 	job.Stdin.Add(r.Body)
 	job.Setenv("remote", r.FormValue("remote"))
 	job.Setenv("t", r.FormValue("t"))
@@ -1181,7 +1181,7 @@ func optionsHandler(eng *engine.Engine, version version.Version, w http.Response
 }
 func writeCorsHeaders(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.Header().Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept")
+	w.Header().Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Registry-Auth")
 	w.Header().Add("Access-Control-Allow-Methods", "GET, POST, DELETE, PUT, OPTIONS")
 }
 
@@ -1405,33 +1405,6 @@ func lookupGidByName(nameOrGid string) (int, error) {
 	return -1, fmt.Errorf("Group %s not found", nameOrGid)
 }
 
-func setupTls(cert, key, ca string, l net.Listener) (net.Listener, error) {
-	tlsCert, err := tls.LoadX509KeyPair(cert, key)
-	if err != nil {
-		return nil, fmt.Errorf("Couldn't load X509 key pair (%s, %s): %s. Key encrypted?",
-			cert, key, err)
-	}
-	tlsConfig := &tls.Config{
-		NextProtos:   []string{"http/1.1"},
-		Certificates: []tls.Certificate{tlsCert},
-		// Avoid fallback on insecure SSL protocols
-		MinVersion: tls.VersionTLS10,
-	}
-
-	if ca != "" {
-		certPool := x509.NewCertPool()
-		file, err := ioutil.ReadFile(ca)
-		if err != nil {
-			return nil, fmt.Errorf("Couldn't read CA certificate: %s", err)
-		}
-		certPool.AppendCertsFromPEM(file)
-		tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		tlsConfig.ClientCAs = certPool
-	}
-
-	return tls.NewListener(l, tlsConfig), nil
-}
-
 func newListener(proto, addr string, bufferRequests bool) (net.Listener, error) {
 	if bufferRequests {
 		return listenbuffer.NewListenBuffer(proto, addr, activationLock)
@@ -1494,10 +1467,6 @@ func setupUnixHttp(addr string, job *engine.Job) (*HttpServer, error) {
 }
 
 func setupTcpHttp(addr string, job *engine.Job) (*HttpServer, error) {
-	if !strings.HasPrefix(addr, "127.0.0.1") && !job.GetenvBool("TlsVerify") {
-		log.Infof("/!\\ DON'T BIND ON ANOTHER IP ADDRESS THAN 127.0.0.1 IF YOU DON'T KNOW WHAT YOU'RE DOING /!\\")
-	}
-
 	r, err := createRouter(job.Eng, job.GetenvBool("Logging"), job.GetenvBool("EnableCors"), job.Getenv("Version"))
 	if err != nil {
 		return nil, err
@@ -1508,16 +1477,37 @@ func setupTcpHttp(addr string, job *engine.Job) (*HttpServer, error) {
 		return nil, err
 	}
 
-	if job.GetenvBool("Tls") || job.GetenvBool("TlsVerify") {
-		var tlsCa string
-		if job.GetenvBool("TlsVerify") {
-			tlsCa = job.Getenv("TlsCa")
-		}
-		l, err = setupTls(job.Getenv("TlsCert"), job.Getenv("TlsKey"), tlsCa, l)
+	var tlsConfig *tls.Config
+
+	switch job.Getenv("Auth") {
+	case "identity":
+		trustKey, err := api.LoadOrCreateTrustKey(job.Getenv("TrustKey"))
 		if err != nil {
 			return nil, err
 		}
+		manager, err := NewClientKeyManager(trustKey, job.Getenv("TrustClients"), job.Getenv("TrustDir"))
+		if err != nil {
+			return nil, err
+		}
+		if tlsConfig, err = NewIdentityAuthTLSConfig(trustKey, manager, addr); err != nil {
+			return nil, fmt.Errorf("Error creating TLS config: %s", err)
+		}
+	case "cert":
+		if tlsConfig, err = NewCertAuthTLSConfig(job.Getenv("AuthCa"), job.Getenv("AuthCert"), job.Getenv("AuthKey")); err != nil {
+			return nil, fmt.Errorf("Error creating TLS config: %s", err)
+		}
+	case "none":
+		tlsConfig = nil
+	default:
+		return nil, fmt.Errorf("Unknown auth method: %s", job.Getenv("Auth"))
 	}
+
+	if tlsConfig == nil {
+		log.Infof("/!\\ DON'T BIND INSECURELY ON A TCP ADDRESS IF YOU DON'T KNOW WHAT YOU'RE DOING /!\\")
+	} else {
+		l = tls.NewListener(l, tlsConfig)
+	}
+
 	return &HttpServer{&http.Server{Addr: addr, Handler: r}, l}, nil
 }
 

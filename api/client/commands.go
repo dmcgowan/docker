@@ -47,6 +47,10 @@ const (
 	tarHeaderSize = 512
 )
 
+var (
+	acceptedImageFilterTags = map[string]struct{}{"dangling": {}}
+)
+
 func (cli *DockerCli) CmdHelp(args ...string) error {
 	if len(args) > 1 {
 		method, exists := cli.getMethod(args[:2]...)
@@ -77,6 +81,7 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 	noCache := cmd.Bool([]string{"#no-cache", "-no-cache"}, false, "Do not use cache when building the image")
 	rm := cmd.Bool([]string{"#rm", "-rm"}, true, "Remove intermediate containers after a successful build")
 	forceRm := cmd.Bool([]string{"-force-rm"}, false, "Always remove intermediate containers, even after unsuccessful builds")
+	pull := cmd.Bool([]string{"-pull"}, false, "Always attempt to pull a newer version of the image")
 	if err := cmd.Parse(args); err != nil {
 		return nil
 	}
@@ -213,6 +218,9 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 		v.Set("forcerm", "1")
 	}
 
+	if *pull {
+		v.Set("pull", "1")
+	}
 	cli.LoadConfigFile()
 
 	headers := http.Header(make(map[string][]string))
@@ -289,7 +297,10 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 	// the password or email from the config file, so prompt them
 	if username != authconfig.Username {
 		if password == "" {
-			oldState, _ := term.SaveState(cli.inFd)
+			oldState, err := term.SaveState(cli.inFd)
+			if err != nil {
+				return err
+			}
 			fmt.Fprintf(cli.out, "Password: ")
 			term.DisableEcho(cli.inFd, oldState)
 
@@ -505,6 +516,12 @@ func (cli *DockerCli) CmdInfo(args ...string) error {
 	if remoteInfo.Exists("MemTotal") {
 		fmt.Fprintf(cli.out, "Total Memory: %s\n", units.BytesSize(float64(remoteInfo.GetInt64("MemTotal"))))
 	}
+	if remoteInfo.Exists("Name") {
+		fmt.Fprintf(cli.out, "Name: %s\n", remoteInfo.Get("Name"))
+	}
+	if remoteInfo.Exists("ID") {
+		fmt.Fprintf(cli.out, "ID: %s\n", remoteInfo.Get("ID"))
+	}
 
 	if remoteInfo.GetBool("Debug") || os.Getenv("DEBUG") != "" {
 		if remoteInfo.Exists("Debug") {
@@ -545,6 +562,13 @@ func (cli *DockerCli) CmdInfo(args ...string) error {
 	if remoteInfo.Exists("IPv4Forwarding") && !remoteInfo.GetBool("IPv4Forwarding") {
 		fmt.Fprintf(cli.err, "WARNING: IPv4 forwarding is disabled.\n")
 	}
+	if remoteInfo.Exists("Labels") {
+		fmt.Fprintln(cli.out, "Labels:")
+		for _, attribute := range remoteInfo.GetList("Labels") {
+			fmt.Fprintf(cli.out, " %s\n", attribute)
+		}
+	}
+
 	return nil
 }
 
@@ -916,13 +940,13 @@ func (cli *DockerCli) CmdPort(args ...string) error {
 		return nil
 	}
 
-	steam, _, err := cli.call("GET", "/containers/"+cmd.Arg(0)+"/json", nil, false)
+	stream, _, err := cli.call("GET", "/containers/"+cmd.Arg(0)+"/json", nil, false)
 	if err != nil {
 		return err
 	}
 
 	env := engine.Env{}
-	if err := env.Decode(steam); err != nil {
+	if err := env.Decode(stream); err != nil {
 		return err
 	}
 	ports := nat.PortMap{}
@@ -1333,6 +1357,12 @@ func (cli *DockerCli) CmdImages(args ...string) error {
 		}
 	}
 
+	for name := range imageFilterArgs {
+		if _, ok := acceptedImageFilterTags[name]; !ok {
+			return fmt.Errorf("Invalid filter '%s'", name)
+		}
+	}
+
 	matchName := cmd.Arg(0)
 	// FIXME: --viz and --tree are deprecated. Remove them in a future version.
 	if *flViz || *flTree {
@@ -1542,7 +1572,7 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 
 		cmd      = cli.Subcmd("ps", "", "List containers")
 		quiet    = cmd.Bool([]string{"q", "-quiet"}, false, "Only display numeric IDs")
-		size     = cmd.Bool([]string{"s", "-size"}, false, "Display sizes")
+		size     = cmd.Bool([]string{"s", "-size"}, false, "Display total file sizes")
 		all      = cmd.Bool([]string{"a", "-all"}, false, "Show all containers. Only running containers are shown by default.")
 		noTrunc  = cmd.Bool([]string{"#notrunc", "-no-trunc"}, false, "Don't truncate output")
 		nLatest  = cmd.Bool([]string{"l", "-latest"}, false, "Show only the latest created container, include non-running ones.")
@@ -1856,13 +1886,13 @@ func (cli *DockerCli) CmdLogs(args ...string) error {
 	}
 	name := cmd.Arg(0)
 
-	steam, _, err := cli.call("GET", "/containers/"+name+"/json", nil, false)
+	stream, _, err := cli.call("GET", "/containers/"+name+"/json", nil, false)
 	if err != nil {
 		return err
 	}
 
 	env := engine.Env{}
-	if err := env.Decode(steam); err != nil {
+	if err := env.Decode(stream); err != nil {
 		return err
 	}
 
@@ -1886,7 +1916,7 @@ func (cli *DockerCli) CmdAttach(args ...string) error {
 	var (
 		cmd     = cli.Subcmd("attach", "CONTAINER", "Attach to a running container")
 		noStdin = cmd.Bool([]string{"#nostdin", "-no-stdin"}, false, "Do not attach STDIN")
-		proxy   = cmd.Bool([]string{"#sig-proxy", "-sig-proxy"}, true, "Proxy all received signals to the process (even in non-TTY mode). SIGCHLD, SIGKILL, and SIGSTOP are not proxied.")
+		proxy   = cmd.Bool([]string{"#sig-proxy", "-sig-proxy"}, true, "Proxy all received signals to the process (non-TTY mode only). SIGCHLD, SIGKILL, and SIGSTOP are not proxied.")
 	)
 
 	if err := cmd.Parse(args); err != nil {
@@ -2142,7 +2172,11 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 	stream, statusCode, err := cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, false)
 	//if image not found try to pull it
 	if statusCode == 404 {
-		fmt.Fprintf(cli.err, "Unable to find image '%s' locally\n", config.Image)
+		repo, tag := parsers.ParseRepositoryTag(config.Image)
+		if tag == "" {
+			tag = graph.DEFAULTTAG
+		}
+		fmt.Fprintf(cli.err, "Unable to find image '%s:%s' locally\n", repo, tag)
 
 		// we don't want to write to stdout anything apart from container.ID
 		if err = cli.pullImageCustomOut(config.Image, cli.err); err != nil {
@@ -2210,7 +2244,7 @@ func (cli *DockerCli) CmdRun(args ...string) error {
 	var (
 		flAutoRemove = cmd.Bool([]string{"#rm", "-rm"}, false, "Automatically remove the container when it exits (incompatible with -d)")
 		flDetach     = cmd.Bool([]string{"d", "-detach"}, false, "Detached mode: run the container in the background and print the new container ID")
-		flSigProxy   = cmd.Bool([]string{"#sig-proxy", "-sig-proxy"}, true, "Proxy received signals to the process (even in non-TTY mode). SIGCHLD, SIGSTOP, and SIGKILL are not proxied.")
+		flSigProxy   = cmd.Bool([]string{"#sig-proxy", "-sig-proxy"}, true, "Proxy received signals to the process (non-TTY mode only). SIGCHLD, SIGSTOP, and SIGKILL are not proxied.")
 		flName       = cmd.String([]string{"#name", "-name"}, "", "Assign a name to the container")
 		flAttach     *opts.ListOpts
 

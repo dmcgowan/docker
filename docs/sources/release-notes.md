@@ -90,7 +90,7 @@ line reference](/reference/commandline/cli/#run).
 
 * You can now set a `DOCKER_TLS_VERIFY` environment variable to secure
 connections by default (rather than having to pass the `--tlsverify` flag on
-every call). For more information, see the [https guide](/articles/https).
+every call).
 
 * Three security issues have been addressed in this release: [CVE-2014-5280,
 CVE-2014-5270, and

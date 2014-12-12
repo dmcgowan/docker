@@ -1,6 +1,7 @@
 package registry
 
 import (
+	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/engine"
 )
 
@@ -35,25 +36,34 @@ func (s *Service) Install(eng *engine.Engine) error {
 // and returns OK if authentication was sucessful.
 // It can be used to verify the validity of a client's credentials.
 func (s *Service) Auth(job *engine.Job) engine.Status {
-	var authConfig = new(AuthConfig)
+	var (
+		authConfig = new(AuthConfig)
+		endpoint   *Endpoint
+		status     string
+		err        error
+	)
 
 	job.GetenvJson("authConfig", authConfig)
 
-	if addr := authConfig.ServerAddress; addr != "" && addr != IndexServerAddress() {
-		endpoint, err := NewEndpoint(addr, s.insecureRegistries)
-		if err != nil {
-			return job.Error(err)
-		}
-		if _, err := endpoint.Ping(); err != nil {
-			return job.Error(err)
-		}
-		authConfig.ServerAddress = endpoint.String()
+	if authConfig.ServerAddress == "" {
+		// Use the official registry address if not specified.
+		authConfig.ServerAddress = IndexServerAddress()
 	}
 
-	status, err := Login(authConfig, HTTPRequestFactory(nil))
-	if err != nil {
+	addr := authConfig.ServerAddress
+	if endpoint, err = NewEndpoint(addr, s.insecureRegistries); err != nil {
+		log.Errorf("unable to get new registry endpoint: %s", err)
 		return job.Error(err)
 	}
+
+	authConfig.ServerAddress = endpoint.String()
+
+	if status, err = Login(authConfig, endpoint, HTTPRequestFactory(nil)); err != nil {
+		log.Errorf("unable to login against registry endpoint %s: %s", endpoint, err)
+		return job.Error(err)
+	}
+
+	log.Infof("successful registry login for endpoint %s: %s", endpoint, status)
 	job.Printf("%s\n", status)
 
 	return engine.StatusOK

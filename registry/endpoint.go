@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/docker/docker/registry/v2"
 )
 
 // for mocking in unit tests
@@ -41,6 +42,14 @@ func scanForAPIVersion(address string) (string, APIVersion) {
 
 // NewEndpoint parses the given address to return a registry endpoint.
 func NewEndpoint(address string, insecureRegistries []string) (endpoint *Endpoint, err error) {
+	//if address == IndexServerURL.String() {
+	//	log.Debugf("Using index server: %s", address)
+	//	return &Endpoint{
+	//		Version:  APIVersion1,
+	//		URL:      IndexServerURL,
+	//		IsSecure: true,
+	//	}, nil
+	//}
 	if endpoint, err = newEndpoint(address, insecureRegistries); err != nil {
 		log.Debugf("unable to get new registry endpoint for address %q: %s", address, err)
 		return nil, err
@@ -102,6 +111,7 @@ type Endpoint struct {
 	Version        APIVersion
 	IsSecure       bool
 	AuthChallenges []*AuthorizationChallenge
+	URLBuilder     *v2.URLBuilder
 }
 
 // Get the formated URL for the root of this registry Endpoint

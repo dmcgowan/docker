@@ -15,6 +15,7 @@ import (
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/utils"
+	"github.com/docker/libtrust"
 )
 
 // Retrieve the all the images to be uploaded in the correct order
@@ -254,7 +255,26 @@ func (s *TagStore) CmdPush(job *engine.Job) engine.Status {
 		}
 
 		if len(manifestBytes) == 0 {
-			// TODO Create manifest and sign
+			mBytes, err := s.newManifest(localName, remoteName, tag)
+			if err != nil {
+				return job.Error(err)
+			}
+			js, err := libtrust.NewJSONSignature(mBytes)
+			if err != nil {
+				return job.Error(err)
+			}
+
+			if err = js.Sign(s.trustKey); err != nil {
+				return job.Error(err)
+			}
+
+			signedBody, err := js.PrettySignature("signatures")
+			if err != nil {
+				return job.Error(err)
+			}
+			log.Infof("Signed manifest using daemon's key: %s", s.trustKey.KeyID())
+
+			manifestBytes = string(signedBody)
 		}
 
 		manifest, verified, err := s.verifyManifest(job.Eng, []byte(manifestBytes))

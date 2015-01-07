@@ -14,6 +14,7 @@ import (
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/utils"
+	"github.com/docker/libtrust"
 )
 
 const DEFAULTTAG = "latest"
@@ -27,6 +28,7 @@ type TagStore struct {
 	graph              *Graph
 	mirrors            []string
 	insecureRegistries []string
+	trustKey           libtrust.PrivateKey
 	Repositories       map[string]Repository
 	sync.Mutex
 	// FIXME: move push/pull-related fields
@@ -55,7 +57,7 @@ func (r Repository) Contains(u Repository) bool {
 	return true
 }
 
-func NewTagStore(path string, graph *Graph, mirrors []string, insecureRegistries []string) (*TagStore, error) {
+func NewTagStore(path string, graph *Graph, mirrors []string, insecureRegistries []string, key libtrust.PrivateKey) (*TagStore, error) {
 	abspath, err := filepath.Abs(path)
 	if err != nil {
 		return nil, err
@@ -66,6 +68,7 @@ func NewTagStore(path string, graph *Graph, mirrors []string, insecureRegistries
 		graph:              graph,
 		mirrors:            mirrors,
 		insecureRegistries: insecureRegistries,
+		trustKey:           key,
 		Repositories:       make(map[string]Repository),
 		pullingPool:        make(map[string]chan struct{}),
 		pushingPool:        make(map[string]chan struct{}),

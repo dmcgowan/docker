@@ -262,6 +262,9 @@ func (s *TagStore) pushV2Repository(r *registry.Session, eng *engine.Engine, out
 
 	endpoint, err := r.V2RegistryEndpoint(repoInfo.Index)
 	if err != nil {
+		if err == registry.ErrEndpointNotFound {
+			return err
+		}
 		return fmt.Errorf("error getting registry endpoint: %s", err)
 	}
 	auth, err := r.GetV2Authorization(endpoint, repoInfo.RemoteName, false)
@@ -403,9 +406,12 @@ func (s *TagStore) CmdPush(job *engine.Job) engine.Status {
 		if err == nil {
 			return engine.StatusOK
 		}
-
-		// error out, no fallback to V1
-		return job.Error(err)
+		if err != registry.ErrEndpointNotFound {
+			// error out, no fallback to V1
+			return job.Error(err)
+		} else {
+			log.Debugf("Skipping V2 registry: endpoint not available")
+		}
 	}
 
 	if err != nil {

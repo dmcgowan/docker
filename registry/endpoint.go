@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -15,6 +16,8 @@ import (
 
 // for mocking in unit tests
 var lookupIP = net.LookupIP
+
+var ErrEndpointNotFound = errors.New("endpoint not found")
 
 // scans string for api version in the URL path. returns the trimmed address, if version found, string and API version.
 func scanForAPIVersion(address string) (string, APIVersion) {
@@ -60,6 +63,9 @@ func validateEndpoint(endpoint *Endpoint) error {
 	// Try HTTPS ping to registry
 	endpoint.URL.Scheme = "https"
 	if _, err := endpoint.Ping(); err != nil {
+		if err == ErrEndpointNotFound {
+			return err
+		}
 		if endpoint.IsSecure {
 			// If registry is secure and HTTPS failed, show user the error and tell them about `--insecure-registry`
 			// in case that's what they need. DO NOT accept unknown CA certificates, and DO NOT fallback to HTTP.
@@ -73,6 +79,9 @@ func validateEndpoint(endpoint *Endpoint) error {
 		var err2 error
 		if _, err2 = endpoint.Ping(); err2 == nil {
 			return nil
+		}
+		if err2 == ErrEndpointNotFound {
+			return err2
 		}
 
 		return fmt.Errorf("invalid registry endpoint %q. HTTPS attempt: %v. HTTP attempt: %v", endpoint, err, err2)
@@ -238,6 +247,10 @@ func (e *Endpoint) pingV2() (RegistryInfo, error) {
 		// on this endpoint object.
 		e.AuthChallenges = parseAuthHeader(resp.Header)
 		return RegistryInfo{}, nil
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return RegistryInfo{}, ErrEndpointNotFound
 	}
 
 	return RegistryInfo{}, fmt.Errorf("v2 registry endpoint returned status %d: %q", resp.StatusCode, http.StatusText(resp.StatusCode))

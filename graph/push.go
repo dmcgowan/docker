@@ -385,6 +385,8 @@ func (s *TagStore) CmdPush(job *engine.Job) engine.Status {
 	// present, the remote may act on the field but this is mostly advisory.
 	metaHeaders["Docker-Command"] = []string{"push"}
 
+	repoInfo.Index.Headers = metaHeaders
+
 	if _, err := s.poolAdd("push", repoInfo.LocalName); err != nil {
 		return job.Error(err)
 	}

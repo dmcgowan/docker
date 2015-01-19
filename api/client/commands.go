@@ -1162,7 +1162,7 @@ func (cli *DockerCli) CmdImport(args ...string) error {
 	v.Set("repo", repository)
 
 	if cmd.NArg() == 3 {
-		fmt.Fprintf(cli.err, "[DEPRECATED] The format 'URL|- [REPOSITORY [TAG]]' as been deprecated. Please use URL|- [REPOSITORY[:TAG]]\n")
+		fmt.Fprintf(cli.err, "[DEPRECATED] The format 'URL|- [REPOSITORY [TAG]]' has been deprecated. Please use URL|- [REPOSITORY[:TAG]]\n")
 		v.Set("tag", cmd.Arg(2))
 	}
 
@@ -1336,7 +1336,7 @@ func (cli *DockerCli) CmdImages(args ...string) error {
 	flTree := cmd.Bool([]string{"#t", "#tree", "#-tree"}, false, "Output graph in tree format")
 
 	flFilter := opts.NewListOpts(nil)
-	cmd.Var(&flFilter, []string{"f", "-filter"}, "Provide filter values (i.e. 'dangling=true')")
+	cmd.Var(&flFilter, []string{"f", "-filter"}, "Provide filter values (i.e., 'dangling=true')")
 	cmd.Require(flag.Max, 1)
 
 	utils.ParseFlags(cmd, args, true)
@@ -1775,7 +1775,7 @@ func (cli *DockerCli) CmdEvents(args ...string) error {
 	since := cmd.String([]string{"#since", "-since"}, "", "Show all events created since timestamp")
 	until := cmd.String([]string{"-until"}, "", "Stream events until this timestamp")
 	flFilter := opts.NewListOpts(nil)
-	cmd.Var(&flFilter, []string{"f", "-filter"}, "Provide filter values (i.e. 'event=stop')")
+	cmd.Var(&flFilter, []string{"f", "-filter"}, "Provide filter values (i.e., 'event=stop')")
 	cmd.Require(flag.Exact, 0)
 
 	utils.ParseFlags(cmd, args, true)

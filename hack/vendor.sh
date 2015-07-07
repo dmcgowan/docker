@@ -36,6 +36,11 @@ clone git github.com/hashicorp/consul v0.5.2
 # get distribution packages
 clone git github.com/docker/distribution 419bbc2da637d9b2a812be78ef8436df7caac70d
 
+clone git github.com/docker/notary 06e445c2efc67c2c2c00af227fa956a3a2905fec
+clone git github.com/endophage/gotuf 82786136d505f582d0f898a2e80c9f6b97b1402c
+clone git github.com/tent/canonical-json-go 96e4ba3a7613a1216cbd1badca4efe382adea337
+clone git github.com/agl/ed25519 d2b94fd789ea21d12fac1a4443dd3a3f79cda72c
+
 clone git github.com/opencontainers/runc v0.0.1 # libcontainer
 # libcontainer deps (see src/github.com/docker/libcontainer/update-vendor.sh)
 clone git github.com/coreos/go-systemd v2

@@ -32,8 +32,7 @@ const (
 	REGISTRYSERVER = DEFAULT_V2_REGISTRY
 	INDEXSERVER    = DEFAULT_V1_REGISTRY + "/v1/"
 	INDEXNAME      = "docker.io"
-
-	// INDEXSERVER = "https://registry-stage.hub.docker.com/v1/"
+	NOTARYSERVER   = "https://notary.docker.io"
 )
 
 var (

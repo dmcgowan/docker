@@ -180,12 +180,12 @@ func (p *v2Pusher) pushV2Tag(tag string) error {
 		return err
 	}
 
-	manifestDigest, err := digestFromManifest(signed, p.repo.Name())
+	manifestDigest, manifestSize, err := digestFromManifest(signed, p.repo.Name())
 	if err != nil {
 		return err
 	}
 	if manifestDigest != "" {
-		out.Write(p.sf.FormatStatus("", "Digest: %s", manifestDigest))
+		out.Write(p.sf.FormatStatus("", "%s: digest: %s size: %d", tag, manifestDigest, manifestSize))
 	}
 
 	return p.repo.Manifests().Put(signed)

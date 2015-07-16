@@ -16,11 +16,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/digest"
 	"github.com/docker/distribution/registry/client/auth"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/docker/docker/cliconfig"
-	"github.com/docker/docker/pkg/homedir"
 	"github.com/docker/docker/pkg/ansiescape"
 	"github.com/docker/docker/pkg/ioutils"
 	flag "github.com/docker/docker/pkg/mflag"
@@ -66,11 +66,20 @@ type target struct {
 	size      int64
 }
 
-func trustDirectory() string {
-	if e := os.Getenv("NOTARY_TRUST_DIR"); e != "" {
-		return e
+func (cli *DockerCli) trustDirectory() string {
+	return filepath.Join(cliconfig.ConfigDir(), "trust")
+}
+
+// certificateDirectory returns the directory containing
+// TLS certificates for the given server. An error is
+// returned if there was an error parsing the server string.
+func (cli *DockerCli) certificateDirectory(server string) (string, error) {
+	u, err := url.Parse(server)
+	if err != nil {
+		return "", err
 	}
-	return filepath.Join(homedir.Get(), ".docker", "trust")
+
+	return filepath.Join(cliconfig.ConfigDir(), "tls", u.Host), nil
 }
 
 func trustServer(index *registry.IndexInfo) string {
@@ -98,7 +107,18 @@ func (cli *DockerCli) getNotaryRepository(repoInfo *registry.RepositoryInfo, aut
 	server := trustServer(repoInfo.Index)
 	var cfg = tlsconfig.ClientDefault
 	cfg.InsecureSkipVerify = !repoInfo.Index.Secure
-	// TODO(dmcgowan): load certificates
+
+	// Get certificate base directory
+	certDir, err := cli.certificateDirectory(server)
+	if err != nil {
+		return nil, err
+	}
+	logrus.Debugf("reading certificate directory: %s", certDir)
+
+	if err := registry.ReadCertsDirectory(&cfg, certDir); err != nil {
+		return nil, err
+	}
+
 	base := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		Dial: (&net.Dialer{
@@ -140,7 +160,7 @@ func (cli *DockerCli) getNotaryRepository(repoInfo *registry.RepositoryInfo, aut
 	modifiers = append(modifiers, transport.RequestModifier(auth.NewAuthorizer(challengeManager, tokenHandler, basicHandler)))
 	tr := transport.NewTransport(base, modifiers...)
 
-	return client.NewNotaryRepository(trustDirectory(), repoInfo.RemoteName, server, tr)
+	return client.NewNotaryRepository(cli.trustDirectory(), repoInfo.RemoteName, server, tr)
 }
 
 func convertTarget(t client.Target) (target, error) {

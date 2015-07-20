@@ -1,7 +1,9 @@
 package client
 
 import (
+	"archive/tar"
 	"bufio"
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -13,9 +15,11 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/graph/tags"
@@ -62,6 +66,9 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 	flCgroupParent := cmd.String([]string{"-cgroup-parent"}, "", "Optional parent cgroup for the container")
 	cmd.Require(flag.Exact, 1)
 
+	// For trusted pull on "FROM <image>" instruction.
+	addTrustedFlags(cmd, true)
+
 	cmd.ParseFlags(args, true)
 
 	var (
@@ -94,6 +101,10 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 			context = ioutil.NopCloser(buf)
 		}
 	} else if urlutil.IsURL(cmd.Arg(0)) && (!urlutil.IsGitURL(cmd.Arg(0)) || !hasGit) {
+		if isTrusted() {
+			return fmt.Errorf("unable to do trusted build from remote context: %s", cmd.Arg(0))
+		}
+
 		isRemote = true
 	} else {
 		root := cmd.Arg(0)
@@ -187,6 +198,69 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	// If we are doing a build with trusted pulls on "FROM <image>"
+	// instructions, we need to dynamically rewrite these instructions in the
+	// Dockerfile. I (jlhawn) have chosen to do this by re-writing the Tar
+	// stream of the context because it's the only catch-all way of doing it
+	// since there are so many ways that a Dockerfile could be specified but
+	// it always ends up in the context whether it be taken as a Dockerfile
+	// from stdin, a tar archive from stdin, or a file (possibly taken from
+	// outside the context directory with "-f, --file").
+	// TODO: this is awful, so implement a client-side builder that uses the
+	// existing pull logic.
+	if isTrusted() {
+		pipeReader, pipeWriter := io.Pipe()
+		tarReader := tar.NewReader(context)
+
+		go func() {
+			tarWriter := tar.NewWriter(pipeWriter)
+
+			for {
+				hdr, err := tarReader.Next()
+				if err == io.EOF {
+					// Signals end of archive.
+					tarWriter.Close()
+					pipeWriter.Close()
+					return
+				}
+				if err != nil {
+					pipeWriter.CloseWithError(err)
+					return
+				}
+
+				var content io.Reader = tarReader
+				if hdr.Name == *dockerfileName {
+					// This entry is the Dockerfile. We need to rewrite the
+					// FROM line(s) of the Dockerfile with a resolved trusted
+					// digest reference. This may end up changing the length
+					// of the Dockerfile so we will need to update the tar
+					// header accordingly.
+					dockerfileBuf, err := cli.makeTrustedDockerfileFrom(tarReader, hdr.Size)
+					if err != nil {
+						pipeWriter.CloseWithError(err)
+						return
+					}
+					hdr.Size = int64(dockerfileBuf.Len())
+
+					content = dockerfileBuf
+				}
+
+				if err := tarWriter.WriteHeader(hdr); err != nil {
+					pipeWriter.CloseWithError(err)
+					return
+				}
+
+				if _, err := io.Copy(tarWriter, content); err != nil {
+					pipeWriter.CloseWithError(err)
+					return
+				}
+			}
+
+		}()
+
+		context = ioutil.NopCloser(pipeReader)
 	}
 
 	var body io.Reader
@@ -314,4 +388,59 @@ func (cli *DockerCli) CmdBuild(args ...string) error {
 		return StatusError{Status: jerr.Message, StatusCode: jerr.Code}
 	}
 	return err
+}
+
+var (
+	dockerfileFromLinePattern        = regexp.MustCompile(`(?i)^FROM[ \f\r\t\v]+(?P<image>[^ \f\r\t\v\n#]+)`)
+	dockerfileLineContinutionPattern = regexp.MustCompile(`\\[ \t]*$`)
+)
+
+// makeTrustedDockerfileFrom rewrites a Dockerfile read from the given input
+// by resolving images in "FROM <image>" instructions to a trusted digest
+// reference.
+func (cli *DockerCli) makeTrustedDockerfileFrom(input io.Reader, approximateSize int64) (*bytes.Buffer, error) {
+	scanner := bufio.NewScanner(input)
+
+	// Store the Dockerfile into a buffer that's about a kilobyte larger than
+	// the given approximate size so that we have extra space for writing
+	// digests.
+	dockerfileBuf := bytes.NewBuffer(make([]byte, 0, approximateSize+1024))
+
+	// Scan the lines of the Dockerfile, looking for a "FROM" line.
+	for scanner.Scan() {
+		line := strings.TrimLeftFunc(scanner.Text(), unicode.IsSpace)
+
+		for dockerfileLineContinutionPattern.MatchString(line) {
+			line = dockerfileLineContinutionPattern.ReplaceAllLiteralString(line, "")
+
+			if scanner.Scan() {
+				nextLine := strings.TrimLeftFunc(scanner.Text(), unicode.IsSpace)
+				line += nextLine
+			}
+		}
+
+		if matches := dockerfileFromLinePattern.FindStringSubmatch(line); matches != nil {
+			// Replace the line with a resolved "FROM repo@digest"
+			repo, tag := parsers.ParseRepositoryTag(matches[1])
+			if tag == "" {
+				tag = tags.DEFAULTTAG
+			}
+			ref := registry.ParseReference(tag)
+
+			if !ref.HasDigest() {
+				trustedRef, err := cli.trustedReference(repo, ref)
+				if err != nil {
+					return nil, err
+				}
+
+				line = dockerfileFromLinePattern.ReplaceAllLiteralString(line, fmt.Sprintf("FROM %s", trustedRef.ImageName(repo)))
+			}
+		}
+
+		if _, err := fmt.Fprintln(dockerfileBuf, line); err != nil {
+			return nil, err
+		}
+	}
+
+	return dockerfileBuf, scanner.Err()
 }

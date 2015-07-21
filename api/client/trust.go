@@ -3,6 +3,7 @@ package client
 import (
 	"bufio"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -237,6 +238,15 @@ func (cli *DockerCli) tagTrusted(repoInfo *registry.RepositoryInfo, trustedRef, 
 	return nil
 }
 
+func notaryError(err error) error {
+	if _, ok := err.(*json.SyntaxError); ok {
+		logrus.Debugf("Notary syntax error: %s", err)
+		return errors.New("no trust data available for repository")
+	}
+
+	return err
+}
+
 func (cli *DockerCli) trustedPull(repoInfo *registry.RepositoryInfo, ref registry.Reference, authConfig cliconfig.AuthConfig) error {
 	var (
 		v    = url.Values{}
@@ -253,7 +263,7 @@ func (cli *DockerCli) trustedPull(repoInfo *registry.RepositoryInfo, ref registr
 		// List all targets
 		targets, err := notaryRepo.ListTargets()
 		if err != nil {
-			return err
+			return notaryError(err)
 		}
 		for _, tgt := range targets {
 			t, err := convertTarget(*tgt)
@@ -266,7 +276,7 @@ func (cli *DockerCli) trustedPull(repoInfo *registry.RepositoryInfo, ref registr
 	} else {
 		t, err := notaryRepo.GetTargetByName(ref.String())
 		if err != nil {
-			return err
+			return notaryError(err)
 		}
 		r, err := convertTarget(*t)
 		if err != nil {
@@ -396,7 +406,7 @@ func (cli *DockerCli) trustedPush(repoInfo *registry.RepositoryInfo, tag string,
 
 	err = repo.Publish()
 	if _, ok := err.(*client.ErrRepoNotInitialized); !ok {
-		return err
+		return notaryError(err)
 	}
 
 	ks := repo.KeyStoreManager
@@ -419,10 +429,9 @@ func (cli *DockerCli) trustedPush(repoInfo *registry.RepositoryInfo, tag string,
 	}
 
 	if err := repo.Initialize(cryptoService); err != nil {
-		return err
+		return notaryError(err)
 	}
 	fmt.Fprintf(cli.out, "Finished initializing %q\n", repoInfo.CanonicalName)
 
-	return repo.Publish()
-
+	return notaryError(repo.Publish())
 }

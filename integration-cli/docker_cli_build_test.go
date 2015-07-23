@@ -5328,3 +5328,27 @@ func (s *DockerSuite) TestBuildRUNErrMsg(c *check.C) {
 		c.Fatalf("RUN doesn't have the correct output:\nGot:%s\nExpected:%s", out, exp)
 	}
 }
+
+func (s *DockerTrustSuite) TestTrustedBuild(c *check.C) {
+	repoName := s.setupTrustedImage(c, "trusted-build")
+	dockerFile := fmt.Sprintf(`
+  FROM %s
+  RUN []
+    `, repoName)
+
+	name := "testtrustedbuild"
+
+	buildCmd := buildImageCmd(name, dockerFile, true)
+	s.trustedCmd(buildCmd)
+	out, _, err := runCommandWithOutput(buildCmd)
+	if err != nil {
+		c.Fatalf("Error running trusted build: %s\n%s", err, out)
+	}
+
+	if !strings.Contains(out, fmt.Sprintf("FROM %s@sha", repoName[:len(repoName)-7])) {
+		c.Fatalf("Unexpected output on trusted build:\n%s", out)
+	}
+
+	// Build command does not create untrusted tag
+	//dockerCmd(c, "rmi", repoName)
+}

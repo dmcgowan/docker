@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y \
 	bash-completion \
 	btrfs-tools \
 	build-essential \
+	createrepo \
 	curl \
 	dpkg-sig \
 	git \
@@ -116,12 +117,17 @@ RUN git clone https://github.com/golang/tools.git /go/src/golang.org/x/tools \
 	&& (cd /go/src/golang.org/x/tools && git checkout -q $GO_TOOLS_COMMIT) \
 	&& go install -v golang.org/x/tools/cmd/cover \
 	&& go install -v golang.org/x/tools/cmd/vet
+# Grab Go's lint tool
+ENV GO_LINT_COMMIT f42f5c1c440621302702cb0741e9d2ca547ae80f
+RUN git clone https://github.com/golang/lint.git /go/src/github.com/golang/lint \
+	&& (cd /go/src/github.com/golang/lint && git checkout -q $GO_LINT_COMMIT) \
+	&& go install -v github.com/golang/lint/golint
 
 # TODO replace FPM with some very minimal debhelper stuff
 RUN gem install --no-rdoc --no-ri fpm --version 1.3.2
 
 # Install registry
-ENV REGISTRY_COMMIT d957768537c5af40e4f4cd96871f7b2bde9e2923
+ENV REGISTRY_COMMIT 2317f721a3d8428215a2b65da4ae85212ed473b4
 RUN set -x \
 	&& export GOPATH="$(mktemp -d)" \
 	&& git clone https://github.com/docker/distribution.git "$GOPATH/src/github.com/docker/distribution" \
@@ -130,8 +136,18 @@ RUN set -x \
 		go build -o /usr/local/bin/registry-v2 github.com/docker/distribution/cmd/registry \
 	&& rm -rf "$GOPATH"
 
+# Install notary server
+ENV NOTARY_COMMIT 65916d3fc42aa2d447ff188f13f54ae40ba5893f
+RUN set -x \
+	&& export GOPATH="$(mktemp -d)" \
+	&& git clone https://github.com/docker/notary.git "$GOPATH/src/github.com/docker/notary" \
+	&& (cd "$GOPATH/src/github.com/docker/notary" && git checkout -q "$NOTARY_COMMIT") \
+	&& GOPATH="$GOPATH/src/github.com/docker/notary/Godeps/_workspace:$GOPATH" \
+		go build -o /usr/local/bin/notary-server github.com/docker/notary/cmd/notary-server \
+	&& rm -rf "$GOPATH"
+
 # Get the "docker-py" source so we can run their integration tests
-ENV DOCKER_PY_COMMIT 91985b239764fe54714fa0a93d52aa362357d251
+ENV DOCKER_PY_COMMIT 8a87001d09852058f08a807ab6e8491d57ca1e88
 RUN git clone https://github.com/docker/docker-py.git /docker-py \
 	&& cd /docker-py \
 	&& git checkout -q $DOCKER_PY_COMMIT
@@ -171,7 +187,7 @@ RUN ./contrib/download-frozen-image.sh /docker-frozen-images \
 # Download man page generator
 RUN set -x \
 	&& export GOPATH="$(mktemp -d)" \
-	&& git clone -b v1.0.1 https://github.com/cpuguy83/go-md2man.git "$GOPATH/src/github.com/cpuguy83/go-md2man" \
+	&& git clone -b v1.0.3 https://github.com/cpuguy83/go-md2man.git "$GOPATH/src/github.com/cpuguy83/go-md2man" \
 	&& git clone -b v1.2 https://github.com/russross/blackfriday.git "$GOPATH/src/github.com/russross/blackfriday" \
 	&& go get -v -d github.com/cpuguy83/go-md2man \
 	&& go build -v -o /usr/local/bin/go-md2man github.com/cpuguy83/go-md2man \

@@ -14,7 +14,6 @@ import (
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/runconfig"
-	"github.com/docker/docker/utils"
 )
 
 func (cli *DockerCli) pullImage(image string) error {
@@ -94,30 +93,54 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 		defer containerIDFile.Close()
 	}
 
-	//create the container
-	stream, _, statusCode, err := cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, nil)
-	//if image not found try to pull it
-	if statusCode == 404 && strings.Contains(err.Error(), config.Image) {
-		repo, tag := parsers.ParseRepositoryTag(config.Image)
-		if tag == "" {
-			tag = tags.DEFAULTTAG
+	repo, tag := parsers.ParseRepositoryTag(config.Image)
+	if tag == "" {
+		tag = tags.DEFAULTTAG
+	}
+
+	ref := registry.ParseReference(tag)
+	var trustedRef registry.Reference
+
+	if isTrusted() && !ref.HasDigest() {
+		var err error
+		trustedRef, err = cli.trustedReference(repo, ref)
+		if err != nil {
+			return nil, err
 		}
-		fmt.Fprintf(cli.err, "Unable to find image '%s' locally\n", utils.ImageReference(repo, tag))
+		config.Image = trustedRef.ImageName(repo)
+	}
+
+	//create the container
+	serverResp, err := cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, nil)
+	//if image not found try to pull it
+	if serverResp.statusCode == 404 && strings.Contains(err.Error(), config.Image) {
+		fmt.Fprintf(cli.err, "Unable to find image '%s' locally\n", ref.ImageName(repo))
 
 		// we don't want to write to stdout anything apart from container.ID
 		if err = cli.pullImageCustomOut(config.Image, cli.err); err != nil {
 			return nil, err
 		}
+		if trustedRef != nil && !ref.HasDigest() {
+			repoInfo, err := registry.ParseRepositoryInfo(repo)
+			if err != nil {
+				return nil, err
+			}
+			if err := cli.tagTrusted(repoInfo, trustedRef, ref); err != nil {
+				return nil, err
+			}
+		}
 		// Retry
-		if stream, _, _, err = cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, nil); err != nil {
+		if serverResp, err = cli.call("POST", "/containers/create?"+containerValues.Encode(), mergedConfig, nil); err != nil {
 			return nil, err
 		}
 	} else if err != nil {
 		return nil, err
 	}
 
+	defer serverResp.body.Close()
+
 	var response types.ContainerCreateResponse
-	if err := json.NewDecoder(stream).Decode(&response); err != nil {
+	if err := json.NewDecoder(serverResp.body).Decode(&response); err != nil {
 		return nil, err
 	}
 	for _, warning := range response.Warnings {
@@ -136,6 +159,7 @@ func (cli *DockerCli) createContainer(config *runconfig.Config, hostConfig *runc
 // Usage: docker create [OPTIONS] IMAGE [COMMAND] [ARG...]
 func (cli *DockerCli) CmdCreate(args ...string) error {
 	cmd := cli.Subcmd("create", []string{"IMAGE [COMMAND] [ARG...]"}, "Create a new container", true)
+	addTrustedFlags(cmd, true)
 
 	// These are flags not stored in Config/HostConfig
 	var (

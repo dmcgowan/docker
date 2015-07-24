@@ -430,7 +430,7 @@ You cannot set any restart policy in combination with
 ["clean up (--rm)"](#clean-up-rm). Setting both `--restart` and `--rm`
 results in an error.
 
-###Examples
+### Examples
 
     $ docker run --restart=always redis
 
@@ -506,7 +506,7 @@ The operator can also adjust the performance parameters of the
 container:
 
     -m, --memory="": Memory limit (format: <number><optional unit>, where unit = b, k, m or g)
-    -memory-swap="": Total memory limit (memory + swap, format: <number><optional unit>, where unit = b, k, m or g)
+    --memory-swap="": Total memory limit (memory + swap, format: <number><optional unit>, where unit = b, k, m or g)
     -c, --cpu-shares=0: CPU shares (relative weight)
     --cpu-period=0: Limit the CPU CFS (Completely Fair Scheduler) period
     --cpuset-cpus="": CPUs in which to allow execution (0-3, 0,1)
@@ -514,6 +514,7 @@ container:
     --cpu-quota=0: Limit the CPU CFS (Completely Fair Scheduler) quota
     --blkio-weight=0: Block IO weight (relative weight) accepts a weight value between 10 and 1000.
     --oom-kill-disable=true|false: Whether to disable OOM Killer for the container or not.
+    --memory-swappiness="": Tune a container's memory swappiness behavior. Accepts an integer between 0 and 100.
 
 ### Memory constraints
 
@@ -590,7 +591,7 @@ would be 2*300M, so processes can use 300M swap memory as well.
 We set both memory and swap memory, so the processes in the container can use
 300M memory and 700M swap memory.
 
-By default, Docker kills processes in a container if an out-of-memory (OOM)
+By default, kernel kills processes in a container if an out-of-memory (OOM)
 error occurs. To change this behaviour, use the `--oom-kill-disable` option.
 Only disable the OOM killer on containers where you have also set the
 `-m/--memory` option. If the `-m` flag is not set, this can result in the host
@@ -610,6 +611,21 @@ The following example, illustrates a dangerous way to use the flag:
 
 The container has unlimited memory which can cause the host to run out memory
 and require killing system processes to free memory.
+
+### Swappiness constraint
+
+By default, a container's kernel can swap out a percentage of anonymous pages.
+To set this percentage for a container, specify a `--memory-swappiness` value
+between 0 and 100. A value of 0 turns off anonymous page swapping. A value of
+100 sets all anonymous pages as swappable. By default, if you are not using
+`--memory-swappiness`, memory swappiness value will be inherited from the parent.
+
+For example, you can set:
+
+    $ docker run -ti --memory-swappiness=0 ubuntu:14.04 /bin/bash
+
+Setting the `--memory-swappiness` option is helpful when you want to retain the
+container's working set and to avoid swapping performance penalties.
 
 ### CPU share constraint
 
@@ -722,6 +738,16 @@ weights of the two containers.
 > **Note:** The blkio weight setting is only available for direct IO. Buffered IO
 > is not currently supported.
 
+## Additional groups
+    --group-add: Add Linux capabilities
+
+By default, the docker container process runs with the supplementary groups looked
+up for the specified user. If one wants to add more to that list of groups, then
+one can use this flag:
+
+    $ docker run -ti --rm --group-add audio  --group-add dbus --group-add 777 busybox id
+    uid=0(root) gid=0(root) groups=10(wheel),29(audio),81(dbus),777
+
 ## Runtime privilege, Linux capabilities, and LXC configuration
 
     --cap-add: Add Linux capabilities
@@ -773,7 +799,7 @@ capabilities using `--cap-add` and `--cap-drop`. By default, Docker has a defaul
 list of capabilities that are kept. The following table lists the Linux capability options which can be added or dropped.
 
 | Capability Key | Capability Description |
-| :----------------- | :---------------| :-------------------- |
+| -------------- | ---------------------- |
 | SETPCAP | Modify process capabilities. |
 | SYS_MODULE| Load and unload kernel modules. |
 | SYS_RAWIO | Perform I/O port operations (iopl(2) and ioperm(2)). |

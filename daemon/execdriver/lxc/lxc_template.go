@@ -12,7 +12,7 @@ import (
 	"github.com/docker/docker/daemon/execdriver"
 	nativeTemplate "github.com/docker/docker/daemon/execdriver/native/template"
 	"github.com/docker/docker/pkg/stringutils"
-	"github.com/docker/libcontainer/label"
+	"github.com/opencontainers/runc/libcontainer/label"
 )
 
 const LxcTemplate = `
@@ -114,6 +114,9 @@ lxc.cgroup.blkio.weight = {{.Resources.BlkioWeight}}
 {{end}}
 {{if .Resources.OomKillDisable}}
 lxc.cgroup.memory.oom_control = {{.Resources.OomKillDisable}}
+{{end}}
+{{if .Resources.MemorySwappiness}}
+lxc.cgroup.memory.swappiness = {{.Resources.MemorySwappiness}}
 {{end}}
 {{end}}
 

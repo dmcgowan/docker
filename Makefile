@@ -46,6 +46,11 @@ binary: build
 cross: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh binary cross
 
+deb: build
+	$(DOCKER_RUN_DOCKER) hack/make.sh binary build-deb
+
+rpm: build
+	$(DOCKER_RUN_DOCKER) hack/make.sh binary build-rpm
 
 test: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh binary cross test-unit test-integration-cli test-docker-py
@@ -60,7 +65,7 @@ test-docker-py: build
 	$(DOCKER_RUN_DOCKER) hack/make.sh binary test-docker-py
 
 validate: build
-	$(DOCKER_RUN_DOCKER) hack/make.sh validate-dco validate-gofmt validate-pkg validate-test validate-toml validate-vet
+	$(DOCKER_RUN_DOCKER) hack/make.sh validate-dco validate-gofmt validate-pkg validate-lint validate-test validate-toml validate-vet
 
 shell: build
 	$(DOCKER_RUN_DOCKER) bash

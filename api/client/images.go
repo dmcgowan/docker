@@ -30,6 +30,7 @@ func (cli *DockerCli) CmdImages(args ...string) error {
 	flFilter := opts.NewListOpts(nil)
 	cmd.Var(&flFilter, []string{"f", "-filter"}, "Filter output based on conditions provided")
 	cmd.Require(flag.Max, 1)
+
 	cmd.ParseFlags(args, true)
 
 	// Consolidate all filter flags, and sanity check them early.
@@ -61,13 +62,15 @@ func (cli *DockerCli) CmdImages(args ...string) error {
 		v.Set("all", "1")
 	}
 
-	rdr, _, _, err := cli.call("GET", "/images/json?"+v.Encode(), nil, nil)
+	serverResp, err := cli.call("GET", "/images/json?"+v.Encode(), nil, nil)
 	if err != nil {
 		return err
 	}
 
+	defer serverResp.body.Close()
+
 	images := []types.Image{}
-	if err := json.NewDecoder(rdr).Decode(&images); err != nil {
+	if err := json.NewDecoder(serverResp.body).Decode(&images); err != nil {
 		return err
 	}
 

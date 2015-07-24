@@ -35,6 +35,9 @@ To see the man page for a command run **man docker <command>**.
 **--bip**=""
   Use the provided CIDR notation address for the dynamically created bridge (docker0); Mutually exclusive of \-b
 
+**--config**=""
+  Specifies the location of the Docker client configuration files. The default is '~/.docker'.
+
 **-D**, **--debug**=*true*|*false*
   Enable debug mode. Default is false.
 
@@ -339,9 +342,9 @@ Example use: `docker -d --storage-opt dm.thinpooldev=/dev/mapper/thin-pool`
 #### dm.basesize
 
 Specifies the size to use when creating the base device, which limits
-the size of images and containers. The default value is 10G. Note,
-thin devices are inherently "sparse", so a 10G device which is mostly
-empty doesn't use 10 GB of space on the pool. However, the filesystem
+the size of images and containers. The default value is 100G. Note,
+thin devices are inherently "sparse", so a 100G device which is mostly
+empty doesn't use 100 GB of space on the pool. However, the filesystem
 will use more space for base images the larger the device
 is. 
 

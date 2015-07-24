@@ -7,16 +7,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"path/filepath"
+	"net/url"
 	"reflect"
 	"strings"
 	"text/template"
 
 	"github.com/docker/docker/cliconfig"
-	"github.com/docker/docker/pkg/homedir"
 	flag "github.com/docker/docker/pkg/mflag"
+	"github.com/docker/docker/pkg/sockets"
 	"github.com/docker/docker/pkg/term"
-	"github.com/docker/docker/utils"
 )
 
 // DockerCli represents the docker command line client.
@@ -26,6 +25,8 @@ type DockerCli struct {
 	proto string
 	// addr holds the client address.
 	addr string
+	// basePath holds the path to prepend to the requests
+	basePath string
 
 	// configFile has the client configuration file
 	configFile *cliconfig.ConfigFile
@@ -178,6 +179,10 @@ func (cli *DockerCli) CheckTtyInput(attachStdin, ttyMode bool) error {
 	return nil
 }
 
+func (cli *DockerCli) PsFormat() string {
+	return cli.configFile.PsFormat
+}
+
 // NewDockerCli returns a DockerCli instance with IO output and error streams set by in, out and err.
 // The key file, protocol (i.e. unix) and address are passed in as strings, along with the tls.Config. If the tls.Config
 // is set the client scheme will be set to https.
@@ -189,6 +194,7 @@ func NewDockerCli(in io.ReadCloser, out, err io.Writer, keyFile string, proto, a
 		isTerminalIn  = false
 		isTerminalOut = false
 		scheme        = "http"
+		basePath      = ""
 	)
 
 	if tlsConfig != nil {
@@ -210,16 +216,24 @@ func NewDockerCli(in io.ReadCloser, out, err io.Writer, keyFile string, proto, a
 	tr := &http.Transport{
 		TLSClientConfig: tlsConfig,
 	}
-	utils.ConfigureTCPTransport(tr, proto, addr)
+	sockets.ConfigureTCPTransport(tr, proto, addr)
 
-	configFile, e := cliconfig.Load(filepath.Join(homedir.Get(), ".docker"))
+	configFile, e := cliconfig.Load(cliconfig.ConfigDir())
 	if e != nil {
 		fmt.Fprintf(err, "WARNING: Error loading config file:%v\n", e)
+	}
+
+	if proto == "tcp" {
+		// error is checked in pkg/parsers already
+		parsed, _ := url.Parse("tcp://" + addr)
+		addr = parsed.Host
+		basePath = parsed.Path
 	}
 
 	return &DockerCli{
 		proto:         proto,
 		addr:          addr,
+		basePath:      basePath,
 		configFile:    configFile,
 		in:            in,
 		out:           out,

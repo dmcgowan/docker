@@ -410,6 +410,9 @@ func (s *Server) getEvents(version version.Version, w http.ResponseWriter, r *ht
 	}
 
 	isFiltered := func(field string, filter []string) bool {
+		if len(field) == 0 {
+			return false
+		}
 		if len(filter) == 0 {
 			return false
 		}
@@ -430,7 +433,9 @@ func (s *Server) getEvents(version version.Version, w http.ResponseWriter, r *ht
 	d := s.daemon
 	es := d.EventsService
 	w.Header().Set("Content-Type", "application/json")
-	enc := json.NewEncoder(ioutils.NewWriteFlusher(w))
+	outStream := ioutils.NewWriteFlusher(w)
+	outStream.Write(nil) // make sure response is sent immediately
+	enc := json.NewEncoder(outStream)
 
 	getContainerId := func(cn string) string {
 		c, err := d.Get(cn)
@@ -446,8 +451,8 @@ func (s *Server) getEvents(version version.Version, w http.ResponseWriter, r *ht
 			ef["container"][i] = getContainerId(cn)
 		}
 
-		if isFiltered(ev.Status, ef["event"]) || isFiltered(ev.From, ef["image"]) ||
-			isFiltered(ev.ID, ef["container"]) {
+		if isFiltered(ev.Status, ef["event"]) || (isFiltered(ev.ID, ef["image"]) &&
+			isFiltered(ev.From, ef["image"])) || isFiltered(ev.ID, ef["container"]) {
 			return nil
 		}
 
@@ -624,6 +629,17 @@ func (s *Server) getContainersLogs(version version.Version, w http.ResponseWrite
 		closeNotifier = notifier.CloseNotify()
 	}
 
+	c, err := s.daemon.Get(vars["name"])
+	if err != nil {
+		return err
+	}
+
+	outStream := ioutils.NewWriteFlusher(w)
+	// write an empty chunk of data (this is to ensure that the
+	// HTTP Response is sent immediatly, even if the container has
+	// not yet produced any data)
+	outStream.Write(nil)
+
 	logsConfig := &daemon.ContainerLogsConfig{
 		Follow:     boolValue(r, "follow"),
 		Timestamps: boolValue(r, "timestamps"),
@@ -631,11 +647,11 @@ func (s *Server) getContainersLogs(version version.Version, w http.ResponseWrite
 		Tail:       r.Form.Get("tail"),
 		UseStdout:  stdout,
 		UseStderr:  stderr,
-		OutStream:  ioutils.NewWriteFlusher(w),
+		OutStream:  outStream,
 		Stop:       closeNotifier,
 	}
 
-	if err := s.daemon.ContainerLogs(vars["name"], logsConfig); err != nil {
+	if err := s.daemon.ContainerLogs(c, logsConfig); err != nil {
 		fmt.Fprintf(w, "Error running logs job: %s\n", err)
 	}
 
@@ -683,7 +699,7 @@ func (s *Server) postCommit(version version.Version, w http.ResponseWriter, r *h
 		return err
 	}
 
-	commitCfg := &builder.BuilderCommitConfig{
+	commitCfg := &builder.CommitConfig{
 		Pause:   pause,
 		Repo:    r.Form.Get("repo"),
 		Tag:     r.Form.Get("tag"),
@@ -813,7 +829,7 @@ func (s *Server) getImagesSearch(version version.Version, w http.ResponseWriter,
 	if err != nil {
 		return err
 	}
-	return json.NewEncoder(w).Encode(query.Results)
+	return writeJSON(w, http.StatusOK, query.Results)
 }
 
 func (s *Server) postImagesPush(version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -1116,6 +1132,11 @@ func (s *Server) postContainersAttach(version version.Version, w http.ResponseWr
 		return fmt.Errorf("Missing parameter")
 	}
 
+	cont, err := s.daemon.Get(vars["name"])
+	if err != nil {
+		return err
+	}
+
 	inStream, outStream, err := hijackServer(w)
 	if err != nil {
 		return err
@@ -1138,7 +1159,7 @@ func (s *Server) postContainersAttach(version version.Version, w http.ResponseWr
 		Stream:    boolValue(r, "stream"),
 	}
 
-	if err := s.daemon.ContainerAttachWithLogs(vars["name"], attachWithLogsConfig); err != nil {
+	if err := s.daemon.ContainerAttachWithLogs(cont, attachWithLogsConfig); err != nil {
 		fmt.Fprintf(outStream, "Error attaching: %s\n", err)
 	}
 
@@ -1153,6 +1174,11 @@ func (s *Server) wsContainersAttach(version version.Version, w http.ResponseWrit
 		return fmt.Errorf("Missing parameter")
 	}
 
+	cont, err := s.daemon.Get(vars["name"])
+	if err != nil {
+		return err
+	}
+
 	h := websocket.Handler(func(ws *websocket.Conn) {
 		defer ws.Close()
 
@@ -1164,7 +1190,7 @@ func (s *Server) wsContainersAttach(version version.Version, w http.ResponseWrit
 			Stream:    boolValue(r, "stream"),
 		}
 
-		if err := s.daemon.ContainerWsAttachWithLogs(vars["name"], wsAttachWithLogsConfig); err != nil {
+		if err := s.daemon.ContainerWsAttachWithLogs(cont, wsAttachWithLogsConfig); err != nil {
 			logrus.Errorf("Error attaching websocket: %s", err)
 		}
 	})
@@ -1178,8 +1204,8 @@ func (s *Server) getContainersByName(version version.Version, w http.ResponseWri
 		return fmt.Errorf("Missing parameter")
 	}
 
-	if version.LessThan("1.19") {
-		containerJSONRaw, err := s.daemon.ContainerInspectRaw(vars["name"])
+	if version.LessThan("1.20") {
+		containerJSONRaw, err := s.daemon.ContainerInspectPre120(vars["name"])
 		if err != nil {
 			return err
 		}
@@ -1261,11 +1287,11 @@ func (s *Server) postBuild(version version.Version, w http.ResponseWriter, r *ht
 	buildConfig.AuthConfigs = authConfigs
 	buildConfig.MemorySwap = int64ValueOrZero(r, "memswap")
 	buildConfig.Memory = int64ValueOrZero(r, "memory")
-	buildConfig.CpuShares = int64ValueOrZero(r, "cpushares")
-	buildConfig.CpuPeriod = int64ValueOrZero(r, "cpuperiod")
-	buildConfig.CpuQuota = int64ValueOrZero(r, "cpuquota")
-	buildConfig.CpuSetCpus = r.FormValue("cpusetcpus")
-	buildConfig.CpuSetMems = r.FormValue("cpusetmems")
+	buildConfig.CPUShares = int64ValueOrZero(r, "cpushares")
+	buildConfig.CPUPeriod = int64ValueOrZero(r, "cpuperiod")
+	buildConfig.CPUQuota = int64ValueOrZero(r, "cpuquota")
+	buildConfig.CPUSetCpus = r.FormValue("cpusetcpus")
+	buildConfig.CPUSetMems = r.FormValue("cpusetmems")
 	buildConfig.CgroupParent = r.FormValue("cgroupparent")
 
 	// Job cancellation. Note: not all job types support this.
@@ -1294,6 +1320,7 @@ func (s *Server) postBuild(version version.Version, w http.ResponseWriter, r *ht
 	return nil
 }
 
+// postContainersCopy is deprecated in favor of getContainersArchivePath.
 func (s *Server) postContainersCopy(version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if vars == nil {
 		return fmt.Errorf("Missing parameter")
@@ -1333,8 +1360,72 @@ func (s *Server) postContainersCopy(version version.Version, w http.ResponseWrit
 	return nil
 }
 
+// // Encode the stat to JSON, base64 encode, and place in a header.
+func setContainerPathStatHeader(stat *types.ContainerPathStat, header http.Header) error {
+	statJSON, err := json.Marshal(stat)
+	if err != nil {
+		return err
+	}
+
+	header.Set(
+		"X-Docker-Container-Path-Stat",
+		base64.StdEncoding.EncodeToString(statJSON),
+	)
+
+	return nil
+}
+
+func (s *Server) headContainersArchive(version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	v, err := archiveFormValues(r, vars)
+	if err != nil {
+		return err
+	}
+
+	stat, err := s.daemon.ContainerStatPath(v.name, v.path)
+	if err != nil {
+		return err
+	}
+
+	return setContainerPathStatHeader(stat, w.Header())
+}
+
+func (s *Server) getContainersArchive(version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	v, err := archiveFormValues(r, vars)
+	if err != nil {
+		return err
+	}
+
+	tarArchive, stat, err := s.daemon.ContainerArchivePath(v.name, v.path)
+	if err != nil {
+		return err
+	}
+	defer tarArchive.Close()
+
+	if err := setContainerPathStatHeader(stat, w.Header()); err != nil {
+		return err
+	}
+
+	w.Header().Set("Content-Type", "application/x-tar")
+	_, err = io.Copy(w, tarArchive)
+
+	return err
+}
+
+func (s *Server) putContainersArchive(version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	v, err := archiveFormValues(r, vars)
+	if err != nil {
+		return err
+	}
+
+	noOverwriteDirNonDir := boolValue(r, "noOverwriteDirNonDir")
+	return s.daemon.ContainerExtractToDir(v.name, v.path, noOverwriteDirNonDir, r.Body)
+}
+
 func (s *Server) postContainerExecCreate(version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := parseForm(r); err != nil {
+		return err
+	}
+	if err := checkForJson(r); err != nil {
 		return err
 	}
 	name := vars["name"]
@@ -1518,6 +1609,9 @@ func createRouter(s *Server) *mux.Router {
 		ProfilerSetup(r, "/debug/")
 	}
 	m := map[string]map[string]HttpApiFunc{
+		"HEAD": {
+			"/containers/{name:.*}/archive": s.headContainersArchive,
+		},
 		"GET": {
 			"/_ping":                          s.ping,
 			"/events":                         s.getEvents,
@@ -1539,6 +1633,7 @@ func createRouter(s *Server) *mux.Router {
 			"/containers/{name:.*}/stats":     s.getContainersStats,
 			"/containers/{name:.*}/attach/ws": s.wsContainersAttach,
 			"/exec/{id:.*}/json":              s.getExecByID,
+			"/containers/{name:.*}/archive":   s.getContainersArchive,
 		},
 		"POST": {
 			"/auth":                         s.postAuth,
@@ -1563,6 +1658,9 @@ func createRouter(s *Server) *mux.Router {
 			"/exec/{name:.*}/start":         s.postContainerExecStart,
 			"/exec/{name:.*}/resize":        s.postContainerExecResize,
 			"/containers/{name:.*}/rename":  s.postContainerRename,
+		},
+		"PUT": {
+			"/containers/{name:.*}/archive": s.putContainersArchive,
 		},
 		"DELETE": {
 			"/containers/{name:.*}": s.deleteContainers,

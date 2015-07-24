@@ -17,8 +17,8 @@ import (
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/parsers"
-	"github.com/docker/libcontainer/label"
 	zfs "github.com/mistifyio/go-zfs"
+	"github.com/opencontainers/runc/libcontainer/label"
 )
 
 type ZfsOptions struct {
@@ -38,6 +38,19 @@ func (*Logger) Log(cmd []string) {
 
 func Init(base string, opt []string) (graphdriver.Driver, error) {
 	var err error
+
+	if _, err := exec.LookPath("zfs"); err != nil {
+		log.Debugf("[zfs] zfs command is not available: %v", err)
+		return nil, graphdriver.ErrPrerequisites
+	}
+
+	file, err := os.OpenFile("/dev/zfs", os.O_RDWR, 600)
+	if err != nil {
+		log.Debugf("[zfs] cannot open /dev/zfs: %v", err)
+		return nil, graphdriver.ErrPrerequisites
+	}
+	defer file.Close()
+
 	options, err := parseOptions(opt)
 	if err != nil {
 		return nil, err
@@ -52,16 +65,6 @@ func Init(base string, opt []string) (graphdriver.Driver, error) {
 			return nil, err
 		}
 	}
-
-	if _, err := exec.LookPath("zfs"); err != nil {
-		return nil, fmt.Errorf("zfs command is not available: %v", err)
-	}
-
-	file, err := os.OpenFile("/dev/zfs", os.O_RDWR, 600)
-	if err != nil {
-		return nil, fmt.Errorf("cannot open /dev/zfs: %v", err)
-	}
-	defer file.Close()
 
 	if options.fsName == "" {
 		options.fsName, err = lookupZfsDataset(rootdir)

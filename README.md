@@ -168,9 +168,9 @@ Under the hood
 Under the hood, Docker is built on the following components:
 
 * The
-  [cgroup](https://en.wikipedia.org/wiki/Cgroups)
+  [cgroups](https://www.kernel.org/doc/Documentation/cgroups/cgroups.txt)
   and
-  [namespacing](http://man7.org/linux/man-pages/man7/namespaces.7.html)
+  [namespaces](http://man7.org/linux/man-pages/man7/namespaces.7.html)
   capabilities of the Linux kernel
 * The [Go](https://golang.org) programming language
 * The [Docker Image Specification](https://github.com/docker/docker/blob/master/image/spec/v1.md)
@@ -183,7 +183,7 @@ Contributing to Docker
 [![Jenkins Build Status](https://jenkins.dockerproject.org/job/Docker%20Master/badge/icon)](https://jenkins.dockerproject.org/job/Docker%20Master/)
 
 Want to hack on Docker? Awesome! We have [instructions to help you get
-started contributing code or documentation.](https://docs.docker.com/project/who-written-for/).
+started contributing code or documentation](https://docs.docker.com/project/who-written-for/).
 
 These instructions are probably not perfect, please let us know if anything
 feels wrong or incomplete. Better yet, submit a PR and improve them yourself.
@@ -289,7 +289,7 @@ system
 * [Docker Compose](https://github.com/docker/compose) (formerly Fig): 
 Define and run multi-container apps
 * [Kitematic](https://github.com/kitematic/kitematic): The easiest way to use 
-Docker on a Mac
+Docker on Mac and Windows
 
 If you know of another project underway that should be listed here, please help 
 us keep this list up-to-date by submitting a PR.

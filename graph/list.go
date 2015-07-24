@@ -2,11 +2,11 @@ package graph
 
 import (
 	"fmt"
-	"log"
 	"path"
 	"sort"
 	"strings"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/parsers/filters"
@@ -59,12 +59,9 @@ func (s *TagStore) Images(config *ImagesConfig) ([]*types.Image, error) {
 	_, filtLabel = imageFilters["label"]
 
 	if config.All && filtTagged {
-		allImages, err = s.graph.Map()
+		allImages = s.graph.Map()
 	} else {
-		allImages, err = s.graph.Heads()
-	}
-	if err != nil {
-		return nil, err
+		allImages = s.graph.Heads()
 	}
 
 	lookup := make(map[string]*types.Image)
@@ -79,7 +76,7 @@ func (s *TagStore) Images(config *ImagesConfig) ([]*types.Image, error) {
 			imgRef := utils.ImageReference(repoName, ref)
 			image, err := s.graph.Get(id)
 			if err != nil {
-				log.Printf("Warning: couldn't load %s from %s: %s", id, imgRef, err)
+				logrus.Warnf("couldn't load %s from %s: %s", id, imgRef, err)
 				continue
 			}
 

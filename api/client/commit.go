@@ -27,6 +27,7 @@ func (cli *DockerCli) CmdCommit(args ...string) error {
 	flConfig := cmd.String([]string{"#run", "#-run"}, "", "This option is deprecated and will be removed in a future version in favor of inline Dockerfile-compatible commands")
 	cmd.Require(flag.Max, 2)
 	cmd.Require(flag.Min, 1)
+
 	cmd.ParseFlags(args, true)
 
 	var (
@@ -66,12 +67,14 @@ func (cli *DockerCli) CmdCommit(args ...string) error {
 			return err
 		}
 	}
-	stream, _, _, err := cli.call("POST", "/commit?"+v.Encode(), config, nil)
+	serverResp, err := cli.call("POST", "/commit?"+v.Encode(), config, nil)
 	if err != nil {
 		return err
 	}
 
-	if err := json.NewDecoder(stream).Decode(&response); err != nil {
+	defer serverResp.body.Close()
+
+	if err := json.NewDecoder(serverResp.body).Decode(&response); err != nil {
 		return err
 	}
 

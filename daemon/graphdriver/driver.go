@@ -101,6 +101,7 @@ func GetDriver(name, home string, options []string) (Driver, error) {
 	if initFunc, exists := drivers[name]; exists {
 		return initFunc(filepath.Join(home, name), options)
 	}
+	logrus.Errorf("Failed to GetDriver graph %s %s", name, home)
 	return nil, ErrNotSupported
 }
 
@@ -171,7 +172,7 @@ func scanPriorDrivers(root string) []string {
 	priorDrivers := []string{}
 	for driver := range drivers {
 		p := filepath.Join(root, driver)
-		if _, err := os.Stat(p); err == nil {
+		if _, err := os.Stat(p); err == nil && driver != "vfs" {
 			priorDrivers = append(priorDrivers, driver)
 		}
 	}

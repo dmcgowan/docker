@@ -45,6 +45,7 @@ List containers
     [
          {
                  "Id": "8dfafdbc3a40",
+                 "Names":["/boring_feynman"],
                  "Image": "ubuntu:latest",
                  "Command": "echo 1",
                  "Created": 1367854155,
@@ -55,6 +56,7 @@ List containers
          },
          {
                  "Id": "9cd87474be90",
+                 "Names":["/coolName"]
                  "Image": "ubuntu:latest",
                  "Command": "echo 222222",
                  "Created": 1367854155,
@@ -65,6 +67,7 @@ List containers
          },
          {
                  "Id": "3176a2479c92",
+                 "Names":["/sleepy_dog"]
                  "Image": "ubuntu:latest",
                  "Command": "echo 3333333333333333",
                  "Created": 1367854154,
@@ -75,6 +78,7 @@ List containers
          },
          {
                  "Id": "4cb07b47f9fb",
+                 "Names":["/running_cat"]
                  "Image": "ubuntu:latest",
                  "Command": "echo 444444444444444444444444444444444",
                  "Created": 1367854152,
@@ -140,9 +144,14 @@ Create a container
                    "com.example.license": "GPL",
                    "com.example.version": "1.0"
            },
-           "Volumes": {
-                   "/tmp": {}
-           },
+           "Mounts": [
+             {
+               "Source": "/data",
+               "Destination": "/data",
+               "Mode": "ro,Z",
+               "RW": false
+             }
+           ],
            "WorkingDir": "",
            "NetworkDisabled": false,
            "MacAddress": "12:34:56:78:9a:bc",
@@ -160,6 +169,7 @@ Create a container
              "CpusetCpus": "0,1",
              "CpusetMems": "0,1",
              "BlkioWeight": 300,
+             "MemorySwappiness": 60,
              "OomKillDisable": false,
              "PortBindings": { "22/tcp": [{ "HostPort": "11022" }] },
              "PublishAllPorts": false,
@@ -208,6 +218,7 @@ Json Parameters:
 -   **CpusetCpus** - String value containing the `cgroups CpusetCpus` to use.
 -   **CpusetMems** - Memory nodes (MEMs) in which to allow execution (0-3, 0,1). Only effective on NUMA systems.
 -   **BlkioWeight** - Block IO weight (relative weight) accepts a weight value between 10 and 1000.
+-   **MemorySwappiness** - Tune a container's memory swappiness behavior. Accepts an integer between 0 and 100.
 -   **OomKillDisable** - Boolean value, whether to disable OOM Killer for the container or not.
 -   **AttachStdin** - Boolean value, attaches to `stdin`.
 -   **AttachStdout** - Boolean value, attaches to `stdout`.
@@ -221,8 +232,7 @@ Json Parameters:
 -   **Entrypoint** - Set the entry point for the container as a string or an array
       of strings.
 -   **Image** - A string specifying the image name to use for the container.
--   **Volumes** – An object mapping mount point paths (strings) inside the
-      container to empty objects.
+-   **Mounts** - An array of mount points in the container.
 -   **WorkingDir** - A string specifying the working directory for commands to
       run in.
 -   **NetworkDisabled** - Boolean value, when true disables networking for the
@@ -418,8 +428,14 @@ Return low-level information on the container `id`
 			"Running": false,
 			"StartedAt": "2015-01-06T15:47:32.072697474Z"
 		},
-		"Volumes": {},
-		"VolumesRW": {}
+		"Mounts": [
+			{
+				"Source": "/data",
+				"Destination": "/data",
+				"Mode": "ro,Z",
+				"RW": false
+			}
+		]
 	}
 
 Status Codes:
@@ -1033,6 +1049,8 @@ Status Codes:
 
 Copy files or folders of container `id`
 
+**Deprecated** in favor of the `archive` endpoint below.
+
 **Example request**:
 
     POST /containers/4fa6e0f0c678/copy HTTP/1.1
@@ -1054,6 +1072,120 @@ Status Codes:
 -   **200** – no error
 -   **404** – no such container
 -   **500** – server error
+
+### Retrieving information about files and folders in a container
+
+`HEAD /containers/(id)/archive`
+
+See the description of the `X-Docker-Container-Path-Stat` header in the
+folowing section.
+
+### Get an archive of a filesystem resource in a container
+
+`GET /containers/(id)/archive`
+
+Get an tar archive of a resource in the filesystem of container `id`.
+
+Query Parameters:
+
+- **path** - resource in the container's filesystem to archive. Required.
+
+    If not an absolute path, it is relative to the container's root directory.
+    The resource specified by **path** must exist. To assert that the resource
+    is expected to be a directory, **path** should end in `/` or  `/.`
+    (assuming a path separator of `/`). If **path** ends in `/.` then this
+    indicates that only the contents of the **path** directory should be
+    copied. A symlink is always resolved to its target.
+
+    **Note**: It is not possible to copy certain system files such as resources
+    under `/proc`, `/sys`, `/dev`, and mounts created by the user in the
+    container.
+
+**Example request**:
+
+        GET /containers/8cce319429b2/archive?path=/root HTTP/1.1
+
+**Example response**:
+
+        HTTP/1.1 200 OK
+        Content-Type: application/x-tar
+        X-Docker-Container-Path-Stat: eyJuYW1lIjoicm9vdCIsInBhdGgiOiIvcm9vdCIsInNpemUiOjQwOTYsIm1vZGUiOjIxNDc0ODQwOTYsIm10aW1lIjoiMjAxNC0wMi0yN1QyMDo1MToyM1oifQ==
+
+        {{ TAR STREAM }}
+
+On success, a response header `X-Docker-Container-Path-Stat` will be set to a
+base64-encoded JSON object containing some filesystem header information about
+the archived resource. The above example value would decode to the following
+JSON object (whitespace added for readability):
+
+        {
+            "name": "root",
+            "path": "/root",
+            "size": 4096,
+            "mode": 2147484096,
+            "mtime": "2014-02-27T20:51:23Z"
+        }
+
+A `HEAD` request can also be made to this endpoint if only this information is
+desired.
+
+Status Codes:
+
+- **200** - success, returns archive of copied resource
+- **400** - client error, bad parameter, details in JSON response body, one of:
+    - must specify path parameter (**path** cannot be empty)
+    - not a directory (**path** was asserted to be a directory but exists as a
+      file)
+- **404** - client error, resource not found, one of:
+    – no such container (container `id` does not exist)
+    - no such file or directory (**path** does not exist)
+- **500** - server error
+
+### Extract an archive of files or folders to a directory in a container
+
+`PUT /containers/(id)/archive`
+
+Upload a tar archive to be extracted to a path in the filesystem of container
+`id`.
+
+Query Parameters:
+
+- **path** - path to a directory in the container
+    to extract the archive's contents into. Required.
+
+    If not an absolute path, it is relative to the container's root directory.
+    The **path** resource must exist.
+- **noOverwriteDirNonDir** - If "1", "true", or "True" then it will be an error
+    if unpacking the given content would cause an existing directory to be
+    replaced with a non-directory and vice versa.
+
+**Example request**:
+
+        PUT /containers/8cce319429b2/archive?path=/vol1 HTTP/1.1
+        Content-Type: application/x-tar
+
+        {{ TAR STREAM }}
+
+**Example response**:
+
+        HTTP/1.1 200 OK
+
+Status Codes:
+
+- **200** – the content was extracted successfully
+- **400** - client error, bad parameter, details in JSON response body, one of:
+    - must specify path parameter (**path** cannot be empty)
+    - not a directory (**path** should be a directory but exists as a file)
+    - unable to overwrite existing directory with non-directory
+      (if **noOverwriteDirNonDir**)
+    - unable to overwrite existing non-directory with directory
+      (if **noOverwriteDirNonDir**)
+- **403** - client error, permission denied, the volume
+    or container rootfs is marked as read-only.
+- **404** - client error, resource not found, one of:
+    – no such container (container `id` does not exist)
+    - no such file or directory (**path** resource does not exist)
+- **500** – server error
 
 ## 2.2 Images
 
@@ -1319,16 +1451,36 @@ Return the history of the image `name`
     Content-Type: application/json
 
     [
-         {
-                 "Id": "b750fe79269d",
-                 "Created": 1364102658,
-                 "CreatedBy": "/bin/bash"
-         },
-         {
-                 "Id": "27cf78414709",
-                 "Created": 1364068391,
-                 "CreatedBy": ""
-         }
+        {
+            "Id": "3db9c44f45209632d6050b35958829c3a2aa256d81b9a7be45b362ff85c54710",
+            "Created": 1398108230,
+            "CreatedBy": "/bin/sh -c #(nop) ADD file:eb15dbd63394e063b805a3c32ca7bf0266ef64676d5a6fab4801f2e81e2a5148 in /",
+            "Tags": [
+                "ubuntu:lucid",
+                "ubuntu:10.04"
+            ],
+            "Size": 182964289,
+            "Comment": ""
+        },
+        {
+            "Id": "6cfa4d1f33fb861d4d114f43b25abd0ac737509268065cdfd69d544a59c85ab8",
+            "Created": 1398108222,
+            "CreatedBy": "/bin/sh -c #(nop) MAINTAINER Tianon Gravi <admwiggin@gmail.com> - mkimage-debootstrap.sh -i iproute,iputils-ping,ubuntu-minimal -t lucid.tar.xz lucid http://archive.ubuntu.com/ubuntu/",
+            "Tags": null,
+            "Size": 0,
+            "Comment": ""
+        },
+        {
+            "Id": "511136ea3c5a64f264b78b5433614aec563103b4d4702f3ba7d4d2698e22c158",
+            "Created": 1371157430,
+            "CreatedBy": "",
+            "Tags": [
+                "scratch12:latest",
+                "scratch:latest"
+            ],
+            "Size": 0,
+            "Comment": "Imported from -"
+        }
     ]
 
 Status Codes:
@@ -1672,9 +1824,14 @@ Create a new image from a container's changes
          "Cmd": [
                  "date"
          ],
-         "Volumes": {
-                 "/tmp": {}
-         },
+         "Mounts": [
+           {
+             "Source": "/data",
+             "Destination": "/data",
+             "Mode": "ro,Z",
+             "RW": false
+           }
+         ],
          "Labels": {
                  "key1": "value1",
                  "key2": "value2"
@@ -1721,11 +1878,11 @@ polling (using since).
 
 Docker containers report the following events:
 
-    create, destroy, die, exec_create, exec_start, export, kill, oom, pause, restart, start, stop, unpause
+    attach, commit, copy, create, destroy, die, exec_create, exec_start, export, kill, oom, pause, rename, resize, restart, start, stop, top, unpause
 
 and Docker images report:
 
-    untag, delete
+    delete, import, pull, push, tag, untag
 
 **Example request**:
 
@@ -2060,8 +2217,7 @@ Return low-level information about the `exec` command `id`.
         "ProcessLabel" : "",
         "AppArmorProfile" : "",
         "RestartCount" : 0,
-        "Volumes" : {},
-        "VolumesRW" : {}
+        "Mounts" : [],
       }
     }
 

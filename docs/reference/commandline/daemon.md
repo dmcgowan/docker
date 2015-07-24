@@ -18,6 +18,7 @@ parent = "smn_cli"
       --api-cors-header=""                   Set CORS headers in the remote API
       -b, --bridge=""                        Attach containers to a network bridge
       --bip=""                               Specify network bridge IP
+      --config=~/.docker                     Location of client config files
       -D, --debug=false                      Enable debug mode
       -d, --daemon=false                     Enable daemon mode
       --default-gateway=""                   Container default gateway IPv4 address
@@ -200,9 +201,9 @@ options for `zfs` start with `zfs`.
  *  `dm.basesize`
 
     Specifies the size to use when creating the base device, which limits the
-    size of images and containers. The default value is 10G. Note, thin devices
-    are inherently "sparse", so a 10G device which is mostly empty doesn't use
-    10 GB of space on the pool. However, the filesystem will use more space for
+    size of images and containers. The default value is 100G. Note, thin devices
+    are inherently "sparse", so a 100G device which is mostly empty doesn't use
+    100 GB of space on the pool. However, the filesystem will use more space for
     the empty case the larger the device is.
 
     This value affects the system-wide "base" empty filesystem
@@ -347,7 +348,7 @@ options for `zfs` start with `zfs`.
     To allow the `docker` daemon to start, regardless of `udev` sync not being
     supported, set `dm.override_udev_sync_check` to true:
 
-	$ docker -d --storage-opt dm.override_udev_sync_check=true
+        $ docker -d --storage-opt dm.override_udev_sync_check=true
 
     When this value is `true`, the  `devicemapper` continues and simply warns
     you the errors are happening.
@@ -373,6 +374,8 @@ Currently supported options of `zfs`:
     Example use:
 
         $ docker -d -s zfs --storage-opt zfs.fsname=zroot/docker
+
+## Docker execdriver option
 
 The Docker daemon uses a specifically built `libcontainer` execution driver as
 its interface to the Linux kernel `namespaces`, `cgroups`, and `SELinux`.
@@ -468,6 +471,10 @@ all containers. It takes the same options as `--ulimit` for `docker run`. If
 these defaults are not set, `ulimit` settings will be inherited, if not set on
 `docker run`, from the Docker daemon. Any `--ulimit` options passed to 
 `docker run` will overwrite these defaults.
+
+Be careful setting `nproc` with the `ulimit` flag as `nproc` is designed by Linux to
+set the maximum number of processes available to a user, not to a container. For details
+please check the [run](run.md) reference.
 
 ## Miscellaneous options
 

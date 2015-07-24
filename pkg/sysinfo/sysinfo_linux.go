@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/docker/libcontainer/cgroups"
+	"github.com/opencontainers/runc/libcontainer/cgroups"
 )
 
 // New returns a new SysInfo, using the filesystem to detect which features the kernel supports.
@@ -49,6 +49,10 @@ func checkCgroupMem(quiet bool) *cgroupMemInfo {
 	info.OomKillDisable = cgroupEnabled(mountPoint, "memory.oom_control")
 	if !quiet && !info.OomKillDisable {
 		logrus.Warnf("Your kernel does not support oom control.")
+	}
+	info.MemorySwappiness = cgroupEnabled(mountPoint, "memory.swappiness")
+	if !quiet && !info.MemorySwappiness {
+		logrus.Warnf("Your kernel does not support memory swappiness.")
 	}
 
 	return info

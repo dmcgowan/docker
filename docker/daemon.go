@@ -13,11 +13,13 @@ import (
 	"github.com/Sirupsen/logrus"
 	apiserver "github.com/docker/docker/api/server"
 	"github.com/docker/docker/autogen/dockerversion"
+	"github.com/docker/docker/cliconfig"
 	"github.com/docker/docker/daemon"
-	"github.com/docker/docker/pkg/homedir"
+	"github.com/docker/docker/daemon/logger"
 	flag "github.com/docker/docker/pkg/mflag"
 	"github.com/docker/docker/pkg/pidfile"
 	"github.com/docker/docker/pkg/signal"
+	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/pkg/timeutils"
 	"github.com/docker/docker/pkg/tlsconfig"
 	"github.com/docker/docker/registry"
@@ -39,7 +41,7 @@ func init() {
 
 func migrateKey() (err error) {
 	// Migrate trust key if exists at ~/.docker/key.json and owned by current user
-	oldPath := filepath.Join(homedir.Get(), ".docker", defaultTrustKeyFile)
+	oldPath := filepath.Join(cliconfig.ConfigDir(), defaultTrustKeyFile)
 	newPath := filepath.Join(getDaemonConfDir(), defaultTrustKeyFile)
 	if _, statErr := os.Stat(newPath); os.IsNotExist(statErr) && currentUserIsOwner(oldPath) {
 		defer func() {
@@ -51,7 +53,7 @@ func migrateKey() (err error) {
 			}
 		}()
 
-		if err := os.MkdirAll(getDaemonConfDir(), os.FileMode(0644)); err != nil {
+		if err := system.MkdirAll(getDaemonConfDir(), os.FileMode(0644)); err != nil {
 			return fmt.Errorf("Unable to create daemon configuration directory: %s", err)
 		}
 
@@ -93,6 +95,12 @@ func mainDaemon() {
 		logrus.Fatalf("Failed to set umask: %v", err)
 	}
 
+	if len(daemonCfg.LogConfig.Config) > 0 {
+		if err := logger.ValidateLogOpts(daemonCfg.LogConfig.Type, daemonCfg.LogConfig.Config); err != nil {
+			logrus.Fatalf("Failed to set log opts: %v", err)
+		}
+	}
+
 	var pfile *pidfile.PidFile
 	if daemonCfg.Pidfile != "" {
 		pf, err := pidfile.New(daemonCfg.Pidfile)
@@ -115,8 +123,8 @@ func mainDaemon() {
 	}
 	serverConfig = setPlatformServerConfig(serverConfig, daemonCfg)
 
-	if *flTls {
-		if *flTlsVerify {
+	if *flTLS {
+		if *flTLSVerify {
 			tlsOptions.ClientAuth = tls.RequireAndVerifyClientCert
 		}
 		tlsConfig, err := tlsconfig.Server(tlsOptions)

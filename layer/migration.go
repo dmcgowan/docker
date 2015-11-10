@@ -14,9 +14,7 @@ import (
 	"github.com/vbatts/tar-split/tar/storage"
 )
 
-func (ls *layerStore) MountByGraphID(name string, graphID string, parent ChainID) (RWLayer, error) {
-	var err error
-
+func (ls *layerStore) MountByGraphID(name string, graphID string, parent ChainID) (l RWLayer, err error) {
 	ls.mountL.Lock()
 	defer ls.mountL.Unlock()
 	m, ok := ls.mounts[name]
@@ -27,6 +25,7 @@ func (ls *layerStore) MountByGraphID(name string, graphID string, parent ChainID
 		if m.mountID != graphID {
 			return nil, errors.New("mount already exists")
 		}
+
 		return m, nil
 	}
 
@@ -146,6 +145,9 @@ func (ls *layerStore) migrateLayer(tx MetadataTransaction, tarDataFile string, l
 }
 
 func (ls *layerStore) RegisterByGraphID(graphID string, parent ChainID, tarDataFile string) (Layer, error) {
+	// err is used to hold the error which will always trigger
+	// cleanup of creates sources but may not be an error returned
+	// to the caller (already exists).
 	var err error
 	var p *roLayer
 	if string(parent) != "" {

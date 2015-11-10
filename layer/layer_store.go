@@ -212,6 +212,9 @@ func (rc *readCounter) Read(p []byte) (n int, err error) {
 }
 
 func (ls *layerStore) Register(ts io.Reader, parent ChainID) (Layer, error) {
+	// err is used to hold the error which will always trigger
+	// cleanup of creates sources but may not be an error returned
+	// to the caller (already exists).
 	var err error
 	var pid string
 	var p *roLayer
@@ -464,8 +467,7 @@ func (ls *layerStore) initMount(graphID, parent string, initFunc MountInit) (str
 	return initID, nil
 }
 
-func (ls *layerStore) Mount(name string, parent ChainID, mountLabel string, initFunc MountInit) (RWLayer, error) {
-	var err error
+func (ls *layerStore) Mount(name string, parent ChainID, mountLabel string, initFunc MountInit) (l RWLayer, err error) {
 	ls.mountL.Lock()
 	defer ls.mountL.Unlock()
 	m, ok := ls.mounts[name]

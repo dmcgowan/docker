@@ -81,7 +81,7 @@ func (daemon *Daemon) Commit(name string, c *ContainerCommitConfig) (string, err
 	if err != nil {
 		return "", err
 	}
-	defer daemon.layerStore.Release(l)
+	defer layer.ReleaseAndLog(daemon.layerStore, l)
 
 	h := image.History{
 		Author:     c.Author,

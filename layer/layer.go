@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/digest"
 	"github.com/docker/docker/pkg/archive"
 )
@@ -216,4 +217,22 @@ func createChainIDFromParent(parent ChainID, dgsts ...DiffID) ChainID {
 		panic(err)
 	}
 	return createChainIDFromParent(ChainID(dgst), dgsts[1:]...)
+}
+
+// ReleaseAndLog releases the provided layer from the given layer
+// store, logging any error and release metadata
+func ReleaseAndLog(ls Store, l Layer) {
+	metadata, err := ls.Release(l)
+	if err != nil {
+		logrus.Errorf("Error releasing layer %s: %v", l.ChainID(), err)
+	}
+	LogReleaseMetadata(metadata)
+}
+
+// LogReleaseMetadata logs a metadata array, use this to
+// ensure consistent logging for release metadata
+func LogReleaseMetadata(metadatas []Metadata) {
+	for _, metadata := range metadatas {
+		logrus.Infof("Layer %s cleaned up", metadata.ChainID)
+	}
 }

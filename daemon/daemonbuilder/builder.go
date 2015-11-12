@@ -223,7 +223,8 @@ func (d Docker) Mount(c *daemon.Container) error {
 
 // Unmount unmounts the root filesystem for the container.
 func (d Docker) Unmount(c *daemon.Container) error {
-	return d.Daemon.Unmount(c)
+	d.Daemon.Unmount(c)
+	return nil
 }
 
 // Start starts a container

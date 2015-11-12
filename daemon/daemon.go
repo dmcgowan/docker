@@ -254,9 +254,7 @@ func (daemon *Daemon) Register(container *Container) error {
 
 		container.unmountIpcMounts(mount.Unmount)
 
-		if err := daemon.Unmount(container); err != nil {
-			logrus.Debugf("unmount error %s", err)
-		}
+		daemon.Unmount(container)
 		if err := container.toDiskLocking(); err != nil {
 			logrus.Errorf("Error saving stopped state to disk: %v", err)
 		}
@@ -982,7 +980,7 @@ func (daemon *Daemon) Mount(container *Container) error {
 		// volume path for a given mounted layer may change over time.  This should only be an error
 		// on non-Windows operating systems.
 		if container.basefs != "" && runtime.GOOS != "windows" {
-			daemon.layerStore.Unmount(container.ID)
+			daemon.Unmount(container)
 			return fmt.Errorf("Error: driver %s is returning inconsistent paths for container %s ('%s' then '%s')",
 				daemon.driver, container.ID, container.basefs, dir)
 		}
@@ -993,8 +991,10 @@ func (daemon *Daemon) Mount(container *Container) error {
 }
 
 // Unmount unsets the container base filesystem
-func (daemon *Daemon) Unmount(container *Container) error {
-	return daemon.layerStore.Unmount(container.ID)
+func (daemon *Daemon) Unmount(container *Container) {
+	if err := daemon.layerStore.Unmount(container.ID); err != nil {
+		logrus.Errorf("Error unmounting container %s: %s", container.ID, err)
+	}
 }
 
 // Run uses the execution driver to run a given container
@@ -1119,14 +1119,14 @@ func (daemon *Daemon) LookupImage(name string) (*types.ImageInspect, error) {
 	var layerMetadata map[string]string
 	layerID := img.GetTopLayerID()
 	if layerID != "" {
-		layer, err := daemon.layerStore.Get(layerID)
+		l, err := daemon.layerStore.Get(layerID)
 		if err != nil {
 			return nil, err
 		}
-		defer daemon.layerStore.Release(layer)
-		size, _ = layer.Size()
+		defer layer.ReleaseAndLog(daemon.layerStore, l)
+		size, _ = l.Size()
 
-		layerMetadata, err = layer.Metadata()
+		layerMetadata, err = l.Metadata()
 		if err != nil {
 			return nil, err
 		}
@@ -1194,7 +1194,7 @@ func (daemon *Daemon) ImageHistory(name string) ([]*types.ImageHistory, error) {
 				return nil, err
 			}
 			layerSize, err = l.DiffSize()
-			daemon.layerStore.Release(l)
+			layer.ReleaseAndLog(daemon.layerStore, l)
 			if err != nil {
 				return nil, err
 			}

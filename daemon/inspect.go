@@ -7,6 +7,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/versions/v1p20"
 	"github.com/docker/docker/daemon/network"
+	"github.com/docker/docker/layer"
 )
 
 // ContainerInspect returns low-level information about a
@@ -153,13 +154,13 @@ func (daemon *Daemon) getInspectData(container *Container, size bool) (*types.Co
 	if err != nil {
 		return nil, err
 	}
-	layer, err := daemon.layerStore.Get(image.GetTopLayerID())
+	l, err := daemon.layerStore.Get(image.GetTopLayerID())
 	if err != nil {
 		return nil, err
 	}
-	defer daemon.layerStore.Release(layer)
+	defer layer.ReleaseAndLog(daemon.layerStore, l)
 
-	graphDriverData, err := layer.Metadata()
+	graphDriverData, err := l.Metadata()
 	if err != nil {
 		return nil, err
 	}

@@ -59,7 +59,7 @@ func (l *tarexporter) Load(inTar io.ReadCloser, outStream io.Writer) error {
 				return err
 			}
 			layers = append(layers, newLayer.DiffID())
-			defer l.ls.Release(newLayer)
+			defer layer.ReleaseAndLog(l.ls, newLayer)
 		}
 
 		configPath, err := safePath(tmpDir, m.Config)
@@ -250,7 +250,8 @@ func (l *tarexporter) legacyLoadImage(oldID, sourceDir string, loadedMap map[str
 		return err
 	}
 
-	_, err = l.ls.Release(newLayer)
+	metadata, err := l.ls.Release(newLayer)
+	layer.LogReleaseMetadata(metadata)
 	if err != nil {
 		return err
 	}

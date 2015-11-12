@@ -284,7 +284,7 @@ func (p *v2Puller) pullV2Tag(out io.Writer, ref reference.Named) (tagUpdated boo
 					notFoundLocally = false
 					logrus.Debugf("Layer already exists: %s", blobSum.String())
 					out.Write(p.sf.FormatProgress(stringid.TruncateID(blobSum.String()), "Already exists", nil))
-					defer p.config.LayerStore.Release(l)
+					defer layer.ReleaseAndLog(p.config.LayerStore, l)
 					topLayer = l
 					continue
 				}
@@ -348,7 +348,7 @@ func (p *v2Puller) pullV2Tag(out io.Writer, ref reference.Named) (tagUpdated boo
 				return false, err
 			}
 
-			defer p.config.LayerStore.Release(l)
+			defer layer.ReleaseAndLog(p.config.LayerStore, l)
 			topLayer = l
 
 			continue
@@ -385,7 +385,7 @@ func (p *v2Puller) pullV2Tag(out io.Writer, ref reference.Named) (tagUpdated boo
 			return false, err
 		}
 
-		defer p.config.LayerStore.Release(l)
+		defer layer.ReleaseAndLog(p.config.LayerStore, l)
 		topLayer = l
 
 		d.broadcaster.Write(p.sf.FormatProgress(stringid.TruncateID(d.digest.String()), "Pull complete", nil))

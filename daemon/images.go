@@ -9,6 +9,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/layer"
 	"github.com/docker/docker/pkg/parsers/filters"
 )
 
@@ -104,7 +105,7 @@ func (daemon *Daemon) Images(filterArgs, filter string, all bool) ([]*types.Imag
 			if err != nil {
 				return nil, err
 			}
-			daemon.layerStore.Release(l)
+			layer.ReleaseAndLog(daemon.layerStore, l)
 		}
 
 		newImage := newImage(img, size)

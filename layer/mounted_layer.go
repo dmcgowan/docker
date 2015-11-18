@@ -1,6 +1,11 @@
 package layer
 
-import "io"
+import (
+	"io"
+	"sync"
+
+	"github.com/docker/docker/daemon/graphdriver"
+)
 
 type mountedLayer struct {
 	name          string
@@ -8,7 +13,9 @@ type mountedLayer struct {
 	initID        string
 	parent        *roLayer
 	path          string
-	layerStore    *layerStore
+	driver        graphdriver.Driver
+	mountL        sync.Mutex
+	mountLabel    string
 	activityCount int
 }
 
@@ -23,7 +30,7 @@ func (ml *mountedLayer) cacheParent() string {
 }
 
 func (ml *mountedLayer) TarStream() (io.Reader, error) {
-	archiver, err := ml.layerStore.driver.Diff(ml.mountID, ml.cacheParent())
+	archiver, err := ml.driver.Diff(ml.mountID, ml.cacheParent())
 	if err != nil {
 		return nil, err
 	}
@@ -31,10 +38,29 @@ func (ml *mountedLayer) TarStream() (io.Reader, error) {
 }
 
 func (ml *mountedLayer) Path() (string, error) {
+	ml.mountL.Lock()
+	defer ml.mountL.Unlock()
 	if ml.path == "" {
-		return "", ErrNotMounted
+		dir, err := ml.driver.Get(ml.mountID, ml.mountLabel)
+		if err != nil {
+			return "", err
+		}
+		ml.path = dir
 	}
 	return ml.path, nil
+}
+
+func (ml *mountedLayer) unmount() error {
+	ml.mountL.Lock()
+	defer ml.mountL.Unlock()
+	if ml.path != "" {
+		if err := ml.driver.Put(ml.mountID); err != nil {
+			return err
+		}
+		ml.path = ""
+	}
+
+	return nil
 }
 
 func (ml *mountedLayer) Parent() Layer {
@@ -48,7 +74,7 @@ func (ml *mountedLayer) Parent() Layer {
 }
 
 func (ml *mountedLayer) Size() (int64, error) {
-	return ml.layerStore.driver.DiffSize(ml.mountID, ml.cacheParent())
+	return ml.driver.DiffSize(ml.mountID, ml.cacheParent())
 }
 
 type autoClosingReader struct {

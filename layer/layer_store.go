@@ -139,10 +139,10 @@ func (ls *layerStore) loadMount(mount string) error {
 	}
 
 	ml := &mountedLayer{
-		name:       mount,
-		mountID:    mountID,
-		initID:     initID,
-		layerStore: ls,
+		name:    mount,
+		mountID: mountID,
+		initID:  initID,
+		driver:  ls.driver,
 	}
 
 	if parent != "" {
@@ -381,17 +381,6 @@ func (ls *layerStore) Release(l Layer) ([]Metadata, error) {
 	return ls.releaseLayer(layer)
 }
 
-func (ls *layerStore) mount(m *mountedLayer, mountLabel string) error {
-	dir, err := ls.driver.Get(m.mountID, mountLabel)
-	if err != nil {
-		return err
-	}
-	m.path = dir
-	m.activityCount++
-
-	return nil
-}
-
 func (ls *layerStore) saveMount(mount *mountedLayer) error {
 	if err := ls.store.SetMountID(mount.name, mount.mountID); err != nil {
 		return err
@@ -457,10 +446,7 @@ func (ls *layerStore) Mount(name string, parent ChainID, mountLabel string, init
 	defer ls.mountL.Unlock()
 	m, ok := ls.mounts[name]
 	if ok {
-		// Check if has path
-		if err := ls.mount(m, mountLabel); err != nil {
-			return nil, err
-		}
+		m.activityCount++
 		return m, nil
 	}
 
@@ -486,10 +472,12 @@ func (ls *layerStore) Mount(name string, parent ChainID, mountLabel string, init
 	}
 
 	m = &mountedLayer{
-		name:       name,
-		parent:     p,
-		mountID:    stringid.GenerateRandomID(),
-		layerStore: ls,
+		name:          name,
+		parent:        p,
+		mountID:       stringid.GenerateRandomID(),
+		driver:        ls.driver,
+		mountLabel:    mountLabel,
+		activityCount: 1,
 	}
 
 	if initFunc != nil {
@@ -508,10 +496,6 @@ func (ls *layerStore) Mount(name string, parent ChainID, mountLabel string, init
 		return nil, err
 	}
 
-	if err = ls.mount(m, mountLabel); err != nil {
-		return nil, err
-	}
-
 	return m, nil
 }
 
@@ -526,8 +510,10 @@ func (ls *layerStore) Unmount(name string) error {
 
 	m.activityCount--
 
-	if err := ls.driver.Put(m.mountID); err != nil {
-		return err
+	if m.activityCount == 0 {
+		if err := m.unmount(); err != nil {
+			return err
+		}
 	}
 
 	return nil

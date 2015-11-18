@@ -25,6 +25,7 @@ func (ls *layerStore) MountByGraphID(name string, graphID string, parent ChainID
 		if m.mountID != graphID {
 			return nil, errors.New("mount already exists")
 		}
+		m.activityCount++
 
 		return m, nil
 	}
@@ -55,10 +56,12 @@ func (ls *layerStore) MountByGraphID(name string, graphID string, parent ChainID
 	// TODO: Ensure graphID has correct parent
 
 	m = &mountedLayer{
-		name:       name,
-		parent:     p,
-		mountID:    graphID,
-		layerStore: ls,
+		name:          name,
+		parent:        p,
+		mountID:       graphID,
+		mountLabel:    "", // TODO: provide a mount label
+		driver:        ls.driver,
+		activityCount: 1,
 	}
 
 	// Check for existing init layer
@@ -68,11 +71,6 @@ func (ls *layerStore) MountByGraphID(name string, graphID string, parent ChainID
 	}
 
 	if err = ls.saveMount(m); err != nil {
-		return nil, err
-	}
-
-	// TODO: provide a mount label
-	if err = ls.mount(m, ""); err != nil {
 		return nil, err
 	}
 

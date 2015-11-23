@@ -20,8 +20,8 @@ var (
 	stringIDRegexp      = regexp.MustCompile(`^[a-f0-9]{64}(-init)?$`)
 	supportedAlgorithms = []digest.Algorithm{
 		digest.SHA256,
-		// digest.SHA384, // Currently not used
-		// digest.SHA512, // Currently not used
+		// SHA512 currently not generated or accepted as
+		// a layer digest.
 	}
 )
 

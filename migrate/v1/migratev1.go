@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path"
 	"path/filepath"
 
 	"encoding/json"
@@ -121,7 +120,7 @@ func migrateImages(root string, ls graphIDRegistrar, is image.Store, ms metadata
 }
 
 func migrateContainers(root string, ls graphIDMounter, is image.Store, imageMappings map[string]image.ID) error {
-	containersDir := path.Join(root, containersDirName)
+	containersDir := filepath.Join(root, containersDirName)
 	dir, err := ioutil.ReadDir(containersDir)
 	if err != nil {
 		return err
@@ -129,11 +128,11 @@ func migrateContainers(root string, ls graphIDMounter, is image.Store, imageMapp
 	for _, v := range dir {
 		id := v.Name()
 
-		if _, err := os.Stat(path.Join(containersDir, id, configFileName)); err == nil {
+		if _, err := os.Stat(filepath.Join(containersDir, id, configFileName)); err == nil {
 			continue
 		}
 
-		containerJSON, err := ioutil.ReadFile(path.Join(containersDir, id, configFileNameLegacy))
+		containerJSON, err := ioutil.ReadFile(filepath.Join(containersDir, id, configFileNameLegacy))
 		if err != nil {
 			return err
 		}
@@ -165,7 +164,7 @@ func migrateContainers(root string, ls graphIDMounter, is image.Store, imageMapp
 			return err
 		}
 
-		if err := ioutil.WriteFile(path.Join(containersDir, id, configFileName), containerJSON, 0600); err != nil {
+		if err := ioutil.WriteFile(filepath.Join(containersDir, id, configFileName), containerJSON, 0600); err != nil {
 			return err
 		}
 

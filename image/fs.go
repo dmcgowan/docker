@@ -25,8 +25,9 @@ type StoreBackend interface {
 	DeleteMetadata(id ID, key string) error
 }
 
+// fs implements StoreBackend using the filesystem.
 type fs struct {
-	sync.Mutex
+	sync.RWMutex
 	root string
 }
 
@@ -63,9 +64,12 @@ func (s *fs) metadataDir(id ID) string {
 	return filepath.Join(s.root, metadataDirName, string(dgst.Algorithm()), dgst.Hex())
 }
 
+// Walk calls the supplied callback for each image ID in the storage backend.
 func (s *fs) Walk(f IDWalkFunc) error {
 	// Only Canonical digest (sha256) is currently supported
+	s.RLock()
 	dir, err := ioutil.ReadDir(filepath.Join(s.root, contentDirName, string(digest.Canonical)))
+	s.RUnlock()
 	if err != nil {
 		return err
 	}
@@ -82,10 +86,10 @@ func (s *fs) Walk(f IDWalkFunc) error {
 	return nil
 }
 
-// todo: GetContent?
+// Get returns the content stored under a given ID.
 func (s *fs) Get(id ID) ([]byte, error) {
-	s.Lock()
-	defer s.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	return s.get(id)
 }
@@ -108,6 +112,7 @@ func (s *fs) get(id ID) ([]byte, error) {
 	return content, nil
 }
 
+// Set stores content under a given ID.
 func (s *fs) Set(data []byte) (ID, error) {
 	s.Lock()
 	defer s.Unlock()
@@ -133,7 +138,7 @@ func (s *fs) Set(data []byte) (ID, error) {
 	return id, nil
 }
 
-// remove base file and helpers
+// Delete removes content and metadata files associated with the ID.
 func (s *fs) Delete(id ID) error {
 	s.Lock()
 	defer s.Unlock()
@@ -147,7 +152,7 @@ func (s *fs) Delete(id ID) error {
 	return nil
 }
 
-// fails if no base file
+// SetMetadata sets metadata for a given ID. It fails if there's no base file.
 func (s *fs) SetMetadata(id ID, key string, data []byte) error {
 	s.Lock()
 	defer s.Unlock()
@@ -167,9 +172,10 @@ func (s *fs) SetMetadata(id ID, key string, data []byte) error {
 	return os.Rename(tempFilePath, filePath)
 }
 
+// GetMetadata returns metadata for a given ID.
 func (s *fs) GetMetadata(id ID, key string) ([]byte, error) {
-	s.Lock()
-	defer s.Unlock()
+	s.RLock()
+	defer s.RUnlock()
 
 	if _, err := s.get(id); err != nil {
 		return nil, err
@@ -177,6 +183,7 @@ func (s *fs) GetMetadata(id ID, key string) ([]byte, error) {
 	return ioutil.ReadFile(filepath.Join(s.metadataDir(id), key))
 }
 
+// DeleteMetadata removes the metadata associated with an ID.
 func (s *fs) DeleteMetadata(id ID, key string) error {
 	s.Lock()
 	defer s.Unlock()

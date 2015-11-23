@@ -1174,10 +1174,10 @@ func (daemon *Daemon) ImageHistory(name string) ([]*types.ImageHistory, error) {
 	rootFS := *img.RootFS
 	rootFS.DiffIDs = nil
 
-	for i := 0; i != len(img.History); i++ {
+	for _, h := range img.History {
 		var layerSize int64
 
-		if !img.History[i].EmptyLayer {
+		if !h.EmptyLayer {
 			if len(img.RootFS.DiffIDs) <= layerCounter {
 				return nil, errors.New("too many non-empty layers in History section")
 			}
@@ -1198,9 +1198,9 @@ func (daemon *Daemon) ImageHistory(name string) ([]*types.ImageHistory, error) {
 
 		history = append([]*types.ImageHistory{{
 			ID:        "<missing>",
-			Created:   img.History[i].Created.Unix(),
-			CreatedBy: img.History[i].CreatedBy,
-			Comment:   img.History[i].Comment,
+			Created:   h.Created.Unix(),
+			CreatedBy: h.CreatedBy,
+			Comment:   h.Comment,
 			Size:      layerSize,
 		}}, history...)
 	}
@@ -1208,8 +1208,8 @@ func (daemon *Daemon) ImageHistory(name string) ([]*types.ImageHistory, error) {
 	// Fill in image IDs and tags
 	histImg := img
 	id := img.ID()
-	for i := 0; i != len(history); i++ {
-		history[i].ID = id.String()
+	for _, h := range history {
+		h.ID = id.String()
 
 		var tags []string
 		for _, r := range daemon.tagStore.References(id) {
@@ -1218,7 +1218,7 @@ func (daemon *Daemon) ImageHistory(name string) ([]*types.ImageHistory, error) {
 			}
 		}
 
-		history[i].Tags = tags
+		h.Tags = tags
 
 		id = histImg.Parent
 		if id == "" {

@@ -14,7 +14,6 @@ import (
 	"github.com/docker/docker/pkg/promise"
 	"github.com/docker/docker/pkg/term"
 	"github.com/docker/engine-api/types"
-	"github.com/docker/engine-api/types/strslice"
 )
 
 func (d *Daemon) registerExecCommand(container *container.Container, config *exec.Config) {
@@ -92,8 +91,7 @@ func (d *Daemon) ContainerExecCreate(config *types.ExecConfig) (string, error) {
 		return "", err
 	}
 
-	cmd := strslice.New(config.Cmd...)
-	entrypoint, args := d.getEntrypointAndArgs(strslice.New(), cmd)
+	entrypoint, args := d.getEntrypointAndArgs([]string{}, config.Cmd)
 
 	keys := []byte{}
 	if config.DetachKeys != "" {

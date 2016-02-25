@@ -228,15 +228,15 @@ func Parse(cmd *flag.FlagSet, args []string) (*container.Config, *container.Host
 
 	var (
 		parsedArgs = cmd.Args()
-		runCmd     *strslice.StrSlice
-		entrypoint *strslice.StrSlice
+		runCmd     strslice.StrSlice
+		entrypoint strslice.StrSlice
 		image      = cmd.Arg(0)
 	)
 	if len(parsedArgs) > 1 {
-		runCmd = strslice.New(parsedArgs[1:]...)
+		runCmd = parsedArgs[1:]
 	}
 	if *flEntrypoint != "" {
-		entrypoint = strslice.New(*flEntrypoint)
+		entrypoint = []string{*flEntrypoint}
 	}
 
 	var (
@@ -402,8 +402,8 @@ func Parse(cmd *flag.FlagSet, args []string) (*container.Config, *container.Host
 		IpcMode:        ipcMode,
 		PidMode:        pidMode,
 		UTSMode:        utsMode,
-		CapAdd:         strslice.New(flCapAdd.GetAll()...),
-		CapDrop:        strslice.New(flCapDrop.GetAll()...),
+		CapAdd:         flCapAdd.GetAll(),
+		CapDrop:        flCapDrop.GetAll(),
 		GroupAdd:       flGroupAdd.GetAll(),
 		RestartPolicy:  restartPolicy,
 		SecurityOpt:    securityOpts,

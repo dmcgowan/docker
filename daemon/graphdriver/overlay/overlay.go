@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -16,49 +17,19 @@ import (
 
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/chrootarchive"
+	"github.com/docker/docker/pkg/directory"
 	"github.com/docker/docker/pkg/idtools"
+	"github.com/docker/docker/pkg/parsers/kernel"
 
 	"github.com/docker/docker/pkg/mount"
 	"github.com/opencontainers/runc/libcontainer/label"
 )
 
-// This is a small wrapper over the NaiveDiffWriter that lets us have a custom
-// implementation of ApplyDiff()
-
 var (
-	// ErrApplyDiffFallback is returned to indicate that a normal ApplyDiff is applied as a fallback from Naive diff writer.
-	ErrApplyDiffFallback = fmt.Errorf("Fall back to normal ApplyDiff")
+	// untar defines the untar method
+	untar = chrootarchive.UntarUncompressed
 )
-
-// ApplyDiffProtoDriver wraps the ProtoDriver by extending the interface with ApplyDiff method.
-type ApplyDiffProtoDriver interface {
-	graphdriver.ProtoDriver
-	// ApplyDiff writes the diff to the archive for the given id and parent id.
-	// It returns the size in bytes written if successful, an error ErrApplyDiffFallback is returned otherwise.
-	ApplyDiff(id, parent string, diff archive.Reader) (size int64, err error)
-}
-
-type naiveDiffDriverWithApply struct {
-	graphdriver.Driver
-	applyDiff ApplyDiffProtoDriver
-}
-
-// NaiveDiffDriverWithApply returns a NaiveDiff driver with custom ApplyDiff.
-func NaiveDiffDriverWithApply(driver ApplyDiffProtoDriver, uidMaps, gidMaps []idtools.IDMap) graphdriver.Driver {
-	return &naiveDiffDriverWithApply{
-		Driver:    graphdriver.NewNaiveDiffDriver(driver, uidMaps, gidMaps),
-		applyDiff: driver,
-	}
-}
-
-// ApplyDiff creates a diff layer with either the NaiveDiffDriver or with a fallback.
-func (d *naiveDiffDriverWithApply) ApplyDiff(id, parent string, diff archive.Reader) (int64, error) {
-	b, err := d.applyDiff.ApplyDiff(id, parent, diff)
-	if err == ErrApplyDiffFallback {
-		return d.Driver.ApplyDiff(id, parent, diff)
-	}
-	return b, err
-}
 
 // This backend uses the overlay union filesystem for containers
 // plus hard link file sharing for images.
@@ -66,11 +37,30 @@ func (d *naiveDiffDriverWithApply) ApplyDiff(id, parent string, diff archive.Rea
 // Each container/image can have a "root" subdirectory which is a plain
 // filesystem hierarchy, or they can use overlay.
 
-// If they use overlay there is a "upper" directory and a "lower-id"
-// file, as well as "merged" and "work" directories. The "upper"
-// directory has the upper layer of the overlay, and "lower-id" contains
-// the id of the parent whose "root" directory shall be used as the lower
-// layer in the overlay. The overlay itself is mounted in the "merged"
+// If they use overlay there is a "diff" directory and a "lower" file,
+// as well as "merged" and "work" directories. The "diff" directory
+// has the upper layer of the overlay and is used to capture any
+// changes to the layer. The "lower" file contains all the lower layer
+// mounts separated by ":" and ordered from uppermost to lowermost
+// layers. The overlay itself is mounted in the "merged" directory,
+// and the "work" dir is needed for overlay to work.
+
+// When the list of "lower" directories gets too long to use for a
+// single overlay mount, the driver will merge multiple "diff"
+// directories into an "upper" directory. These merged layers will
+// still contain the diff directory and use a "lower-id" file which
+// is compatible with the overlay driver implementation used in
+// Docker 1.11 and before.
+
+// If a kernel older than 4.0.0 is in use or the "nomultilower" option
+// is given, the overlay driver will behave the same as in Docker
+// 1.11 and before. In this mode, overlay does not allow multiple
+// "diff" directories to be used as overlay lower directories.
+// Overlay directories will contain an "upper" directory and a
+// "lower-id" file. The "upper" directory has the upper layer of the
+// overlay, and "lower-id" contains the id of the parent whose "root"
+// directory shall be used as the lower layer in the overlay. As
+// in the other, the overlay itself is mounted in the "merged"
 // directory, and the "work" dir is needed for overlay to work.
 
 // When a overlay layer is created there are two cases, either the
@@ -96,6 +86,9 @@ type Driver struct {
 	uidMaps       []idtools.IDMap
 	gidMaps       []idtools.IDMap
 	ctr           *graphdriver.RefCounter
+	multiLower    bool
+
+	naiveDiffDriver graphdriver.Driver
 }
 
 var backingFs = "<unknown>"
@@ -158,7 +151,28 @@ func Init(home string, options []string, uidMaps, gidMaps []idtools.IDMap) (grap
 		ctr:       graphdriver.NewRefCounter(),
 	}
 
-	return NaiveDiffDriverWithApply(d, uidMaps, gidMaps), nil
+	if !noMultiLowerOption(options) {
+		v, err := kernel.GetKernelVersion()
+		if err != nil {
+			return nil, err
+		}
+		if kernel.CompareKernelVersion(*v, kernel.VersionInfo{Kernel: 4, Major: 0, Minor: 0}) >= 0 {
+			d.multiLower = true
+		}
+	}
+
+	d.naiveDiffDriver = graphdriver.NewNaiveDiffDriver(d, uidMaps, gidMaps)
+
+	return d, nil
+}
+
+func noMultiLowerOption(options []string) bool {
+	for _, option := range options {
+		if option == "nomultilower" {
+			return true
+		}
+	}
+	return false
 }
 
 func supportsOverlay() error {
@@ -210,15 +224,34 @@ func (d *Driver) GetMetadata(id string) (map[string]string, error) {
 		return metadata, nil
 	}
 
-	lowerID, err := ioutil.ReadFile(path.Join(dir, "lower-id"))
-	if err != nil {
-		return nil, err
-	}
-
-	metadata["LowerDir"] = path.Join(d.dir(string(lowerID)), "root")
-	metadata["UpperDir"] = path.Join(dir, "upper")
+	// Check if has lower-dirs
 	metadata["WorkDir"] = path.Join(dir, "work")
 	metadata["MergedDir"] = path.Join(dir, "merged")
+
+	lowers, err := ioutil.ReadFile(path.Join(dir, "lower"))
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, err
+		}
+
+		// Handle legacy case
+		lowerID, err := ioutil.ReadFile(path.Join(dir, "lower-id"))
+		if err != nil {
+			return nil, err
+		}
+
+		metadata["LowerDir"] = path.Join(d.dir(string(lowerID)), "root")
+		metadata["UpperDir"] = path.Join(dir, "upper")
+
+		return metadata, nil
+	}
+
+	lowersArray := strings.Split(string(lowers), ":")
+	for i := range lowersArray {
+		lowersArray[i] = path.Join(d.home, lowersArray[i])
+	}
+	metadata["LowerDir"] = strings.Join(lowersArray, ":")
+	metadata["UpperDir"] = path.Join(dir, "diff")
 
 	return metadata, nil
 }
@@ -272,18 +305,52 @@ func (d *Driver) Create(id, parent, mountLabel string, storageOpt map[string]str
 		return nil
 	}
 
-	parentDir := d.dir(parent)
+	if !d.multiLower {
+		parentDir := d.dir(parent)
 
-	// Ensure parent exists
-	if _, err := os.Lstat(parentDir); err != nil {
-		return err
-	}
+		// Ensure parent exists
+		if _, err := os.Lstat(parentDir); err != nil {
+			return err
+		}
 
-	// If parent has a root, just do a overlay to it
-	parentRoot := path.Join(parentDir, "root")
+		// If parent has a root, just do a overlay to it
+		parentRoot := path.Join(parentDir, "root")
 
-	if s, err := os.Lstat(parentRoot); err == nil {
-		if err := idtools.MkdirAs(path.Join(dir, "upper"), s.Mode(), rootUID, rootGID); err != nil {
+		if s, err := os.Lstat(parentRoot); err == nil {
+			if err := idtools.MkdirAs(path.Join(dir, "upper"), s.Mode(), rootUID, rootGID); err != nil {
+				return err
+			}
+			if err := idtools.MkdirAs(path.Join(dir, "work"), 0700, rootUID, rootGID); err != nil {
+				return err
+			}
+			if err := idtools.MkdirAs(path.Join(dir, "merged"), 0700, rootUID, rootGID); err != nil {
+				return err
+			}
+			if err := ioutil.WriteFile(path.Join(dir, "lower-id"), []byte(parent), 0666); err != nil {
+				return err
+			}
+			return nil
+		}
+
+		// Otherwise, copy the upper and the lower-id from the parent
+
+		lowerID, err := ioutil.ReadFile(path.Join(parentDir, "lower-id"))
+		if err != nil {
+			return err
+		}
+
+		if err := ioutil.WriteFile(path.Join(dir, "lower-id"), lowerID, 0666); err != nil {
+			return err
+		}
+
+		parentUpperDir := path.Join(parentDir, "upper")
+		s, err := os.Lstat(parentUpperDir)
+		if err != nil {
+			return err
+		}
+
+		upperDir := path.Join(dir, "upper")
+		if err := idtools.MkdirAs(upperDir, s.Mode(), rootUID, rootGID); err != nil {
 			return err
 		}
 		if err := idtools.MkdirAs(path.Join(dir, "work"), 0700, rootUID, rootGID); err != nil {
@@ -292,31 +359,13 @@ func (d *Driver) Create(id, parent, mountLabel string, storageOpt map[string]str
 		if err := idtools.MkdirAs(path.Join(dir, "merged"), 0700, rootUID, rootGID); err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(path.Join(dir, "lower-id"), []byte(parent), 0666); err != nil {
-			return err
-		}
-		return nil
+
+		return copyDir(parentUpperDir, upperDir, 0)
 	}
 
-	// Otherwise, copy the upper and the lower-id from the parent
+	lowerDirs, err := d.getLowerDirs(parent, true)
 
-	lowerID, err := ioutil.ReadFile(path.Join(parentDir, "lower-id"))
-	if err != nil {
-		return err
-	}
-
-	if err := ioutil.WriteFile(path.Join(dir, "lower-id"), lowerID, 0666); err != nil {
-		return err
-	}
-
-	parentUpperDir := path.Join(parentDir, "upper")
-	s, err := os.Lstat(parentUpperDir)
-	if err != nil {
-		return err
-	}
-
-	upperDir := path.Join(dir, "upper")
-	if err := idtools.MkdirAs(upperDir, s.Mode(), rootUID, rootGID); err != nil {
+	if err := idtools.MkdirAs(path.Join(dir, "diff"), 0755, rootUID, rootGID); err != nil {
 		return err
 	}
 	if err := idtools.MkdirAs(path.Join(dir, "work"), 0700, rootUID, rootGID); err != nil {
@@ -325,8 +374,116 @@ func (d *Driver) Create(id, parent, mountLabel string, storageOpt map[string]str
 	if err := idtools.MkdirAs(path.Join(dir, "merged"), 0700, rootUID, rootGID); err != nil {
 		return err
 	}
+	if err := ioutil.WriteFile(path.Join(dir, "lower"), []byte(strings.Join(lowerDirs, ":")), 0666); err != nil {
+		return err
+	}
 
-	return copyDir(parentUpperDir, upperDir, 0)
+	return nil
+}
+
+func (d *Driver) squashLayers(layerDirs []string) ([]string, error) {
+	st, err := os.Stat(path.Join(d.home, layerDirs[0]))
+	if err != nil {
+		return nil, err
+	}
+	layerid := path.Base(path.Dir(layerDirs[0]))
+
+	squashDir := d.dir(layerid)
+	if _, err := os.Stat(path.Join(squashDir, "root")); err == nil {
+
+		return []string{path.Join(layerid, "root")}, nil
+	}
+
+	if lowerID, err := ioutil.ReadFile(path.Join(squashDir, "lower-id")); err == nil {
+		parentRoot := path.Join(string(lowerID), "root")
+		return []string{path.Join(layerid, "upper"), parentRoot}, nil
+	}
+
+	rootLayer := layerDirs[len(layerDirs)-1]
+	if path.Base(rootLayer) != "root" {
+		return nil, fmt.Errorf("root layer is not a root directory, cannot squash %s", rootLayer)
+	}
+	rootLayerID := path.Base(path.Dir(layerDirs[0]))
+
+	stat, ok := st.Sys().(*syscall.Stat_t)
+	if !ok {
+		return nil, fmt.Errorf("unable to get raw syscall.Stat_t data for %s", layerDirs[0])
+	}
+
+	upperDir := path.Join(squashDir, "upper")
+	if err := idtools.MkdirAs(upperDir, st.Mode(), int(stat.Uid), int(stat.Gid)); err != nil {
+		// TODO(dmcgowan): if upper directory exists and lower-id does not, replace upper dir?
+		return nil, err
+	}
+	for i := len(layerDirs) - 2; i >= 0; i-- {
+		// Use hardlinks to copy since this upper directory will not be written
+		// to and copying will increase disk space and copy time. If this directory
+		// is mounted in the future the diff directory will still be used protecting
+		// writes to this upper layer. Should the directory be named differently to
+		// ensure that a downgrade cannot write here or express this upper could
+		// get out of sync with the diff directory?
+		copyDir(layerDirs[i], upperDir, copyHardlink&overwrite)
+	}
+	if err := ioutil.WriteFile(path.Join(squashDir, "lower-id"), []byte(rootLayerID), 0666); err != nil {
+		// TODO(dmcgowan): cleanup upper dir
+		return nil, err
+	}
+	return []string{path.Join(layerid, "upper"), rootLayer}, nil
+}
+
+func (d *Driver) getLowerDirs(parent string, squash bool) ([]string, error) {
+	parentDir := d.dir(parent)
+
+	// Ensure parent exists
+	if _, err := os.Lstat(parentDir); err != nil {
+		return nil, err
+	}
+
+	// If parent has a root, just do a overlay to it
+	parentRoot := path.Join(parentDir, "root")
+	if _, err := os.Lstat(parentRoot); err == nil {
+		return []string{path.Join(parent, "root")}, nil
+	}
+
+	// If parent has lower directories
+	parentLower := path.Join(parentDir, "lower")
+
+	lowers, err := ioutil.ReadFile(parentLower)
+	if err == nil {
+		lowersArray := strings.Split(string(lowers), ":")
+		// TODO(dmcgowan): Calculate this based on length, figure out which remaining layers need squash
+		if len(lowersArray) >= 25 {
+			squashed, err := d.squashLayers(lowersArray[20:])
+			if err != nil {
+				return nil, err
+			}
+			lowersArray = append(lowersArray[:20], squashed...)
+		}
+		diffDir := path.Join(parentDir, "diff")
+		if _, err := os.Lstat(diffDir); err != nil {
+			return nil, err
+		}
+		return append([]string{path.Join(parent, "diff")}, lowersArray...), nil
+	}
+
+	// Otherwise handle legacy overlay upper directory, copy the upper and the lower-id from the parent
+
+	lowerID, err := ioutil.ReadFile(path.Join(parentDir, "lower-id"))
+	if err != nil {
+		return nil, err
+	}
+
+	parentUpperDir := path.Join(parentDir, "upper")
+	if _, err := os.Lstat(parentUpperDir); err != nil {
+		return nil, err
+	}
+
+	lowerRootDir := path.Join(d.dir(string(lowerID)), "root")
+	if _, err := os.Lstat(lowerRootDir); err != nil {
+		return nil, err
+	}
+
+	return []string{path.Join(parent, "upper"), path.Join(string(lowerID), "root")}, nil
 }
 
 func (d *Driver) dir(id string) string {
@@ -360,20 +517,36 @@ func (d *Driver) Get(id string, mountLabel string) (string, error) {
 		return rootDir, nil
 	}
 
-	lowerID, err := ioutil.ReadFile(path.Join(dir, "lower-id"))
-	if err != nil {
-		return "", err
+	var (
+		lowerDirs string
+		upperDir  string
+	)
+
+	// If has lower directory, mount diff directly
+	lowers, err := ioutil.ReadFile(path.Join(dir, "lower"))
+	if err == nil {
+		lowersArray := strings.Split(string(lowers), ":")
+		for i := range lowersArray {
+			lowersArray[i] = path.Join(d.home, lowersArray[i])
+		}
+		lowerDirs = strings.Join(lowersArray, ":")
+		upperDir = path.Join(dir, "diff")
+	} else {
+		// Handle legacy overlay directories
+		lowerID, err := ioutil.ReadFile(path.Join(dir, "lower-id"))
+		if err != nil {
+			return "", err
+		}
+		lowerDirs = path.Join(d.dir(string(lowerID)), "root")
+		upperDir = path.Join(dir, "upper")
 	}
-	lowerDir := path.Join(d.dir(string(lowerID)), "root")
-	upperDir := path.Join(dir, "upper")
+
 	workDir := path.Join(dir, "work")
 	mergedDir := path.Join(dir, "merged")
 
 	if count := d.ctr.Increment(id); count > 1 {
 		return mergedDir, nil
 	}
-
-	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", lowerDir, upperDir, workDir)
 
 	// if it's mounted already, just return
 	mounted, err := d.mounted(mergedDir)
@@ -386,7 +559,13 @@ func (d *Driver) Get(id string, mountLabel string) (string, error) {
 		return mergedDir, nil
 	}
 
-	if err := syscall.Mount("overlay", mergedDir, "overlay", 0, label.FormatMountLabel(opts, mountLabel)); err != nil {
+	opts := fmt.Sprintf("lowerdir=%s,upperdir=%s,workdir=%s", lowerDirs, upperDir, workDir)
+	mountLabel = label.FormatMountLabel(opts, mountLabel)
+	if len(mountLabel) > syscall.Getpagesize() {
+		d.ctr.Decrement(id)
+		return "", fmt.Errorf("cannot mount layer, mount label too large %d", len(mountLabel))
+	}
+	if err := syscall.Mount("overlay", mergedDir, "overlay", 0, mountLabel); err != nil {
 		d.ctr.Decrement(id)
 		return "", fmt.Errorf("error creating overlay mount to %s: %v", mergedDir, err)
 	}
@@ -446,17 +625,22 @@ func (d *Driver) Put(id string) error {
 	return nil
 }
 
-// ApplyDiff applies the new layer on top of the root, if parent does not exist with will return a ErrApplyDiffFallback error.
-func (d *Driver) ApplyDiff(id string, parent string, diff archive.Reader) (size int64, err error) {
+// Exists checks to see if the id is already mounted.
+func (d *Driver) Exists(id string) bool {
+	_, err := os.Stat(d.dir(id))
+	return err == nil
+}
+
+func (d *Driver) classicApplyDiff(id string, parent string, diff archive.Reader) (size int64, err error) {
 	dir := d.dir(id)
 
 	if parent == "" {
-		return 0, ErrApplyDiffFallback
+		return d.naiveDiffDriver.ApplyDiff(id, parent, diff)
 	}
 
 	parentRootDir := path.Join(d.dir(parent), "root")
 	if _, err := os.Stat(parentRootDir); err != nil {
-		return 0, ErrApplyDiffFallback
+		return d.naiveDiffDriver.ApplyDiff(id, parent, diff)
 	}
 
 	// We now know there is a parent, and it has a "root" directory containing
@@ -498,8 +682,112 @@ func (d *Driver) ApplyDiff(id string, parent string, diff archive.Reader) (size 
 	return
 }
 
-// Exists checks to see if the id is already mounted.
-func (d *Driver) Exists(id string) bool {
-	_, err := os.Stat(d.dir(id))
-	return err == nil
+// ApplyDiff applies the new layer into a root
+func (d *Driver) ApplyDiff(id string, parent string, diff archive.Reader) (size int64, err error) {
+	if !d.multiLower {
+		return d.classicApplyDiff(id, parent, diff)
+	}
+	dir := d.dir(id)
+
+	var applyDir string
+	if parent == "" {
+		applyDir = path.Join(path.Join(dir, "root"))
+	} else {
+		applyDir = path.Join(path.Join(dir, "diff"))
+
+	}
+
+	logrus.Debugf("Applying tar in %s", applyDir)
+	// Overlay doesn't need the parent id to apply the diff
+	if err := untar(diff, applyDir, &archive.TarOptions{
+		UIDMaps:        d.uidMaps,
+		GIDMaps:        d.gidMaps,
+		WhiteoutFormat: archive.OverlayWhiteoutFormat,
+	}); err != nil {
+		return 0, err
+	}
+
+	return d.DiffSize(id, parent)
+}
+
+func (d *Driver) getDiffPath(id, parent string) string {
+	dir := d.dir(id)
+
+	diffPath := path.Join(dir, "diff")
+	if _, err := os.Stat(diffPath); err == nil {
+		return diffPath
+	}
+
+	// Check if upper and lower-id == parent
+	diffPath = path.Join(dir, "upper")
+	if _, err := os.Stat(diffPath); err == nil {
+		lowerID, err := ioutil.ReadFile(path.Join(dir, "lower-id"))
+		if err != nil {
+			return ""
+		}
+		if parent == string(lowerID) {
+			return diffPath
+		}
+	}
+
+	return ""
+}
+
+// DiffSize calculates the changes between the specified id
+// and its parent and returns the size in bytes of the changes
+// relative to its base filesystem directory.
+func (d *Driver) DiffSize(id, parent string) (size int64, err error) {
+	diffPath := d.getDiffPath(id, parent)
+	if diffPath != "" {
+		return directory.Size(diffPath)
+	}
+
+	return d.naiveDiffDriver.DiffSize(id, parent)
+}
+
+// Diff produces an archive of the changes between the specified
+// layer and its parent layer which may be "".
+func (d *Driver) Diff(id, parent string) (archive.Archive, error) {
+	diffPath := d.getDiffPath(id, parent)
+	if diffPath != "" {
+		logrus.Debugf("Tar with options on %s", diffPath)
+		return archive.TarWithOptions(diffPath, &archive.TarOptions{
+			Compression:    archive.Uncompressed,
+			UIDMaps:        d.uidMaps,
+			GIDMaps:        d.gidMaps,
+			WhiteoutFormat: archive.OverlayWhiteoutFormat,
+		})
+	}
+
+	return d.naiveDiffDriver.Diff(id, parent)
+}
+
+func (d *Driver) getParentLayerPaths(id string) ([]string, error) {
+	lowers, err := ioutil.ReadFile(path.Join(d.dir(id), "lower"))
+	if err != nil {
+		return nil, err
+	}
+	lowersArray := strings.Split(string(lowers), ":")
+	for i := range lowersArray {
+		lowersArray[i] = path.Join(d.home, lowersArray[i])
+	}
+	return lowersArray, nil
+}
+
+// Changes produces a list of changes between the specified layer
+// and its parent layer. If parent is "", then all changes will be ADD changes.
+func (d *Driver) Changes(id, parent string) ([]archive.Change, error) {
+	// Overlay doesn't have snapshots, so we need to get changes from all parent
+	// layers.
+	diffPath := d.getDiffPath(id, parent)
+	if diffPath != "" {
+		layers, err := d.getParentLayerPaths(id)
+		if err != nil {
+			return nil, err
+		}
+
+		return archive.OverlayChanges(layers, diffPath)
+	}
+
+	return d.naiveDiffDriver.Changes(id, parent)
 }

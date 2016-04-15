@@ -17,6 +17,7 @@ type copyFlags int
 
 const (
 	copyHardlink copyFlags = 1 << iota
+	overwrite
 )
 
 func copyRegular(srcPath, dstPath string, mode os.FileMode) error {
@@ -70,6 +71,17 @@ func copyDir(srcDir, dstDir string, flags copyFlags) error {
 		stat, ok := f.Sys().(*syscall.Stat_t)
 		if !ok {
 			return fmt.Errorf("Unable to get raw syscall.Stat_t data for %s", srcPath)
+		}
+
+		if flags&overwrite != 0 {
+			st, err := os.Stat(dstPath)
+			if err == nil {
+				if !st.IsDir() {
+					if err := syscall.Unlink(dstPath); err != nil {
+						return err
+					}
+				}
+			}
 		}
 
 		isHardlink := false

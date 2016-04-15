@@ -13,6 +13,7 @@ import (
 func init() {
 	// Do not sure chroot to speed run time and allow archive
 	// errors or hangs to be debugged directly from the test process.
+	untar = archive.UntarUncompressed
 	graphdriver.ApplyUncompressedLayer = archive.ApplyUncompressedLayer
 }
 

@@ -103,6 +103,10 @@ type simpleCredentialStore struct {
 	auth types.AuthConfig
 }
 
+func (scs simpleCredentialStore) AuthorizationCode(u *url.URL) (string, string) {
+	return "", ""
+}
+
 func (scs simpleCredentialStore) Basic(u *url.URL) (string, string) {
 	return scs.auth.Username, scs.auth.Password
 }

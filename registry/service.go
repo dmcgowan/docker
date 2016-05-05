@@ -51,9 +51,19 @@ func (s *Service) Auth(authConfig *types.AuthConfig, userAgent string) (status, 
 	}
 
 	for _, endpoint := range endpoints {
+
+		// Attempt normal login using username/password or authorization code
 		login := loginV2
 		if endpoint.Version == APIVersion1 {
+			if authConfig.Username == "" {
+				// Cannot login to V1 endpoint without username
+				continue
+			}
 			login = loginV1
+		}
+		// TODO: Figure out better method to decide to use this
+		if authConfig.Username == "" && authConfig.RegistryToken == "oauth2" {
+			login = authCodeV2
 		}
 
 		status, token, err = login(authConfig, endpoint, userAgent)

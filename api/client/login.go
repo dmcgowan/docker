@@ -2,14 +2,19 @@ package client
 
 import (
 	"bufio"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"runtime"
 	"strings"
 
 	"golang.org/x/net/context"
+	"golang.org/x/oauth2"
 
+	"github.com/docker/distribution/registry/client/auth"
 	Cli "github.com/docker/docker/cli"
 	"github.com/docker/docker/cliconfig"
 	"github.com/docker/docker/cliconfig/credentials"
@@ -27,6 +32,7 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 	cmd := Cli.Subcmd("login", []string{"[SERVER]"}, Cli.DockerCommands["login"].Description+".\nIf no server is specified, the default is defined by the daemon.", true)
 	cmd.Require(flag.Max, 1)
 
+	flOAuth2 := cmd.Bool([]string{"-oauth"}, false, "Use Oauth2 login flow")
 	flUser := cmd.String([]string{"u", "-username"}, "", "Username")
 	flPassword := cmd.String([]string{"p", "-password"}, "", "Password")
 
@@ -40,8 +46,12 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 		cli.in = os.Stdin
 	}
 
-	var serverAddress string
-	var isDefaultRegistry bool
+	var (
+		serverAddress     string
+		isDefaultRegistry bool
+		authConfig        types.AuthConfig
+		err               error
+	)
 	if len(cmd.Args()) > 0 {
 		serverAddress = cmd.Arg(0)
 	} else {
@@ -49,9 +59,64 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 		isDefaultRegistry = true
 	}
 
-	authConfig, err := cli.configureAuth(*flUser, *flPassword, serverAddress, isDefaultRegistry)
-	if err != nil {
-		return err
+	if *flOAuth2 {
+		authConfig.ServerAddress = serverAddress
+		authConfig.RegistryToken = "oauth2"
+
+		response, err := cli.client.RegistryLogin(context.Background(), authConfig)
+		if err != nil {
+			return err
+		}
+
+		if response.IdentityToken == "" {
+			return fmt.Errorf("Unable to complete oauth2 login: %v", response.Status)
+		}
+
+		b, err := base64.StdEncoding.DecodeString(response.IdentityToken)
+		if err != nil {
+			return fmt.Errorf("Bad oauth2 configuration from server: %v", err)
+		}
+		var oauth2Config auth.OAuth2Config
+		if err := json.Unmarshal(b, &oauth2Config); err != nil {
+			return fmt.Errorf("Bad oauth2 configuration from server: %v", err)
+		}
+
+		config := &oauth2.Config{
+			ClientID: oauth2Config.ClientID,
+			Endpoint: oauth2.Endpoint{
+				AuthURL: oauth2Config.AuthURL,
+			},
+			RedirectURL: oauth2Config.RedirectURL,
+			Scopes:      oauth2Config.Scopes,
+		}
+
+		state := "generatedrandomstate...."
+		codeURL := config.AuthCodeURL(state, oauth2.AccessTypeOffline, oauth2.ApprovalForce)
+
+		fmt.Fprintln(cli.out, "Login on browser and return")
+
+		// TODO: Make handler configurable
+
+		codeChan, err := auth.NewOAuth2CallbackHandler(config.RedirectURL, state, oauth2Config.LandingURL)
+		if err != nil {
+			return fmt.Errorf("Error setting up oauth2 callback: %v", err)
+		}
+
+		cmd := exec.Command("xdg-open", codeURL)
+		if err := cmd.Run(); err != nil {
+			fmt.Fprintf(cli.out, "Error opening url: %v\n", err)
+			fmt.Fprintf(cli.out, "Open URL in webrowser on localhost: %q", codeURL)
+		}
+
+		// TODO: Timeout waiting
+		code := <-codeChan
+
+		authConfig.RegistryToken = fmt.Sprintf("%s %s", code, config.RedirectURL)
+	} else {
+		authConfig, err = cli.configureAuth(*flUser, *flPassword, serverAddress, isDefaultRegistry)
+		if err != nil {
+			return err
+		}
 	}
 
 	response, err := cli.client.RegistryLogin(context.Background(), authConfig)
@@ -60,8 +125,10 @@ func (cli *DockerCli) CmdLogin(args ...string) error {
 	}
 
 	if response.IdentityToken != "" {
+		authConfig.Username = "Confidential"
 		authConfig.Password = ""
 		authConfig.IdentityToken = response.IdentityToken
+		authConfig.RegistryToken = ""
 	}
 	if err := storeCredentials(cli.configFile, authConfig); err != nil {
 		return fmt.Errorf("Error saving credentials: %v", err)

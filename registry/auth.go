@@ -1,6 +1,8 @@
 package registry
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -79,6 +81,19 @@ type loginCredentialStore struct {
 	authConfig *types.AuthConfig
 }
 
+func (lcs loginCredentialStore) AuthorizationCode(*url.URL) (string, string) {
+	// Parse RegistryToken as "<code>[ <redirect_uri>]"
+	parts := strings.SplitN(lcs.authConfig.RegistryToken, " ", 2)
+	if len(parts) == 2 {
+		return parts[0], parts[1]
+	}
+	if len(parts) == 1 {
+		return parts[0], ""
+	}
+
+	return "", ""
+}
+
 func (lcs loginCredentialStore) Basic(*url.URL) (string, string) {
 	return lcs.authConfig.Username, lcs.authConfig.Password
 }
@@ -117,6 +132,7 @@ func loginV2(authConfig *types.AuthConfig, endpoint APIEndpoint, userAgent strin
 	}
 
 	credentialAuthConfig := *authConfig
+
 	creds := loginCredentialStore{
 		authConfig: &credentialAuthConfig,
 	}
@@ -127,6 +143,11 @@ func loginV2(authConfig *types.AuthConfig, endpoint APIEndpoint, userAgent strin
 		OfflineAccess: true,
 		ClientID:      AuthClientID,
 	}
+
+	if credentialAuthConfig.RegistryToken != "" {
+		tokenHandlerOptions.ForceOAuth = true
+	}
+
 	tokenHandler := auth.NewTokenHandlerWithOptions(tokenHandlerOptions)
 	basicHandler := auth.NewBasicHandler(creds)
 	modifiers = append(modifiers, auth.NewAuthorizer(challengeManager, tokenHandler, basicHandler))
@@ -151,6 +172,7 @@ func loginV2(authConfig *types.AuthConfig, endpoint APIEndpoint, userAgent strin
 		if !foundV2 {
 			err = fallbackError{err: err}
 		}
+		logrus.Debugf("Error doing request: %v", err)
 		return "", "", err
 	}
 	defer resp.Body.Close()
@@ -161,11 +183,74 @@ func loginV2(authConfig *types.AuthConfig, endpoint APIEndpoint, userAgent strin
 		if !foundV2 {
 			err = fallbackError{err: err}
 		}
+		logrus.Debugf("Error from upstream: %v", err)
 		return "", "", err
 	}
 
 	return "Login Succeeded", credentialAuthConfig.IdentityToken, nil
 
+}
+
+func authCodeV2(authConfig *types.AuthConfig, endpoint APIEndpoint, userAgent string) (string, string, error) {
+	logrus.Debugf("Requesting confidential login using oauth2")
+
+	// If OAUTH2 flag, only use v2 api
+	// Ping v2 endpoint to get challenge manager
+	// Hit token server for oauth2 parameters for auth code
+	// If invalid response, return error
+	// If success, return redirect as token, 200
+	modifiers := DockerHeaders(userAgent, nil)
+	authTransport := transport.NewTransport(NewTransport(endpoint.TLSConfig), modifiers...)
+
+	challengeManager, _, err := PingV2Registry(endpoint, authTransport)
+	if err != nil {
+		logrus.Debugf("Error pinging: %v", err)
+		return "", "", err
+	}
+	logrus.Debugf("Challenge manager %v: %#v", *endpoint.URL, challengeManager)
+
+	u, err := url.Parse(strings.TrimRight(endpoint.URL.String(), "/") + "/v2/")
+	if err != nil {
+		return "", "", err
+	}
+
+	challenges, err := challengeManager.GetChallenges(*u)
+	if err != nil {
+		logrus.Debugf("No challenges!")
+		return "", "", err
+	}
+
+	authClient := &http.Client{
+		Transport: authTransport,
+		Timeout:   15 * time.Second,
+	}
+
+	logrus.Debugf("Challenges: %v", challenges)
+
+	var configStr string
+	for _, challenge := range challenges {
+		oauth2Config, err := auth.GetOAuth2Config(authClient, challenge)
+		if err != nil {
+			if err == auth.ErrInvalidOAuth2Scheme {
+				continue
+			}
+			logrus.Debugf("Challenge accepted, and rejected with %v", err)
+			return "", "", err
+		}
+
+		b, err := json.Marshal(oauth2Config)
+		if err != nil {
+			return "", "", err
+		}
+
+		configStr = base64.StdEncoding.EncodeToString(b)
+	}
+
+	if configStr == "" {
+		return "OAuth2 Not Supported", "", nil
+	}
+
+	return "Login Redirected", configStr, nil
 }
 
 // ResolveAuthConfig matches an auth configuration to a server address or a URL

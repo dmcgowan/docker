@@ -22,6 +22,10 @@ type dumbCredentialStore struct {
 	auth *types.AuthConfig
 }
 
+func (dcs dumbCredentialStore) AuthorizationCode(*url.URL) (string, string) {
+	return "", ""
+}
+
 func (dcs dumbCredentialStore) Basic(*url.URL) (string, string) {
 	return dcs.auth.Username, dcs.auth.Password
 }

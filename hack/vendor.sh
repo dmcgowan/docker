@@ -2,7 +2,7 @@
 set -e
 
 cd "$(dirname "$BASH_SOURCE")/.."
-rm -rf vendor/
+#rm -rf vendor/
 source 'hack/.vendor-helpers.sh'
 
 # the following lines are in sorted order, FYI

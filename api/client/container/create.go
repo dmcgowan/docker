@@ -7,11 +7,10 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/client"
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/pkg/jsonmessage"
-	// FIXME migrate to docker/distribution/reference
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	runconfigopts "github.com/docker/docker/runconfig/opts"
 	apiclient "github.com/docker/engine-api/client"
@@ -74,7 +73,7 @@ func runCreate(dockerCli *client.DockerCli, flags *pflag.FlagSet, opts *createOp
 }
 
 func pullImage(ctx context.Context, dockerCli *client.DockerCli, image string, out io.Writer) error {
-	ref, err := reference.ParseNamed(image)
+	ref, err := reference.NormalizedName(image)
 	if err != nil {
 		return err
 	}
@@ -161,21 +160,21 @@ func createContainer(ctx context.Context, dockerCli *client.DockerCli, config *c
 	}
 
 	var trustedRef reference.Canonical
-	_, ref, err := reference.ParseIDOrReference(config.Image)
+	ref, err := reference.ParseAnyReference(config.Image)
 	if err != nil {
 		return nil, err
 	}
-	if ref != nil {
-		ref = reference.WithDefaultTag(ref)
+	if named, ok := ref.(reference.Named); ok && reference.IsNameOnly(named) {
+		ref = reference.EnsureTagged(named)
+	}
 
-		if ref, ok := ref.(reference.NamedTagged); ok && client.IsTrusted() {
-			var err error
-			trustedRef, err = dockerCli.TrustedReference(ctx, ref)
-			if err != nil {
-				return nil, err
-			}
-			config.Image = trustedRef.String()
+	if ref, ok := ref.(reference.NamedTagged); ok && client.IsTrusted() {
+		var err error
+		trustedRef, err = dockerCli.TrustedReference(ctx, ref)
+		if err != nil {
+			return nil, err
 		}
+		config.Image = trustedRef.String()
 	}
 
 	//create the container

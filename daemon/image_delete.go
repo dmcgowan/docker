@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/errors"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/stringid"
-	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/types"
 )
 
@@ -191,7 +191,9 @@ func (daemon *Daemon) getContainerUsingImage(imageID image.ID) *container.Contai
 // optional tag or digest reference. If tag or digest is omitted, the default
 // tag is used. Returns the resolved image reference and an error.
 func (daemon *Daemon) removeImageRef(ref reference.Named) (reference.Named, error) {
-	ref = reference.WithDefaultTag(ref)
+	if reference.IsNameOnly(ref) {
+		ref = reference.EnsureTagged(ref)
+	}
 	// Ignore the boolean value returned, as far as we're concerned, this
 	// is an idempotent operation and it's okay if the reference didn't
 	// exist in the first place.

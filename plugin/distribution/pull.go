@@ -14,9 +14,9 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/manifest/schema2"
+	"github.com/docker/distribution/reference"
 	dockerdist "github.com/docker/docker/distribution"
 	archive "github.com/docker/docker/pkg/chrootarchive"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
@@ -64,7 +64,7 @@ func (pd *pullData) Layer() (io.ReadCloser, error) {
 
 // Pull downloads the plugin from Store
 func Pull(name string, rs registry.Service, metaheader http.Header, authConfig *types.AuthConfig) (PullData, error) {
-	ref, err := reference.ParseNamed(name)
+	ref, err := reference.NormalizedName(name)
 	if err != nil {
 		logrus.Debugf("pull.go: error in ParseNamed: %v", err)
 		return nil, err
@@ -76,12 +76,12 @@ func Pull(name string, rs registry.Service, metaheader http.Header, authConfig *
 		return nil, err
 	}
 
-	if err := dockerdist.ValidateRepoName(repoInfo.Name()); err != nil {
+	if err := dockerdist.ValidateRepoName(repoInfo.FamiliarName()); err != nil {
 		logrus.Debugf("pull.go: error in ValidateRepoName: %v", err)
 		return nil, err
 	}
 
-	endpoints, err := rs.LookupPullEndpoints(repoInfo.Hostname())
+	endpoints, err := rs.LookupPullEndpoints(repoInfo.Domain())
 	if err != nil {
 		logrus.Debugf("pull.go: error in LookupPullEndpoints: %v", err)
 		return nil, err
@@ -106,13 +106,15 @@ func Pull(name string, rs registry.Service, metaheader http.Header, authConfig *
 			logrus.Debugf("pull.go: !confirmedV2")
 			return nil, ErrUnSupportedRegistry
 		}
-		logrus.Debugf("Trying to pull %s from %s %s", repoInfo.Name(), endpoint.URL, endpoint.Version)
+		logrus.Debugf("Trying to pull %s from %s %s", repoInfo.FamiliarName(), endpoint.URL, endpoint.Version)
 		break
 	}
 
-	tag := DefaultTag
+	var tag string
 	if ref, ok := ref.(reference.NamedTagged); ok {
 		tag = ref.Tag()
+	} else {
+		tag = reference.EnsureTagged(ref).Tag()
 	}
 
 	// tags := repository.Tags(context.Background())

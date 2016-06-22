@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/stringid"
 	"github.com/docker/docker/plugin/distribution"
-	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/types"
 )
 
@@ -45,9 +45,9 @@ func (pm *Manager) Inspect(name string) (tp types.Plugin, err error) {
 
 // Pull pulls a plugin and enables it.
 func (pm *Manager) Pull(name string, metaHeader http.Header, authConfig *types.AuthConfig) (types.PluginPrivileges, error) {
-	ref, err := reference.ParseNamed(name)
+	ref, err := reference.NormalizedName(name)
 	if err != nil {
-		logrus.Debugf("error in reference.ParseNamed: %v", err)
+		logrus.Debugf("error in reference.NormalizedName: %v", err)
 		return nil, err
 	}
 	name = ref.String()

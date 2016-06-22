@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/errors"
-	"github.com/docker/docker/reference"
 )
 
 func (d *Daemon) imageNotExistToErrcode(err error) error {
@@ -14,16 +14,18 @@ func (d *Daemon) imageNotExistToErrcode(err error) error {
 			e := fmt.Errorf("No such image: %s", dne.RefOrID)
 			return errors.NewRequestNotFoundError(e)
 		}
-		tag := reference.DefaultTag
-		ref, err := reference.ParseNamed(dne.RefOrID)
+		ref, err := reference.NormalizedName(dne.RefOrID)
 		if err != nil {
-			e := fmt.Errorf("No such image: %s:%s", dne.RefOrID, tag)
+			e := fmt.Errorf("No such image: %s", dne.RefOrID)
 			return errors.NewRequestNotFoundError(e)
 		}
+		var tag string
 		if tagged, isTagged := ref.(reference.NamedTagged); isTagged {
 			tag = tagged.Tag()
+		} else {
+			tag = reference.EnsureTagged(ref).Tag()
 		}
-		e := fmt.Errorf("No such image: %s:%s", ref.Name(), tag)
+		e := fmt.Errorf("No such image: %s:%s", reference.FamiliarName(ref), tag)
 		return errors.NewRequestNotFoundError(e)
 	}
 	return err

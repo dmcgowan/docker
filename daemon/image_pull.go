@@ -5,10 +5,10 @@ import (
 	"strings"
 
 	"github.com/docker/distribution/digest"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/builder"
 	"github.com/docker/docker/distribution"
 	"github.com/docker/docker/pkg/progress"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
@@ -46,11 +46,13 @@ func (daemon *Daemon) PullImage(ctx context.Context, image, tag string, metaHead
 
 // PullOnBuild tells Docker to pull image referenced by `name`.
 func (daemon *Daemon) PullOnBuild(ctx context.Context, name string, authConfigs map[string]types.AuthConfig, output io.Writer) (builder.Image, error) {
-	ref, err := reference.ParseNamed(name)
+	ref, err := reference.NormalizedName(name)
 	if err != nil {
 		return nil, err
 	}
-	ref = reference.WithDefaultTag(ref)
+	if reference.IsNameOnly(ref) {
+		ref = reference.EnsureTagged(ref)
+	}
 
 	pullRegistryAuth := &types.AuthConfig{}
 	if len(authConfigs) > 0 {

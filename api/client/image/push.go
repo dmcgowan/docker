@@ -3,10 +3,10 @@ package image
 import (
 	"golang.org/x/net/context"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/client"
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/pkg/jsonmessage"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +30,7 @@ func NewPushCommand(dockerCli *client.DockerCli) *cobra.Command {
 }
 
 func runPush(dockerCli *client.DockerCli, remote string) error {
-	ref, err := reference.ParseNamed(remote)
+	ref, err := reference.NormalizedName(remote)
 	if err != nil {
 		return err
 	}

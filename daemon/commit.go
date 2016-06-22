@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types/backend"
 	"github.com/docker/docker/builder/dockerfile"
 	"github.com/docker/docker/container"
@@ -15,7 +16,6 @@ import (
 	"github.com/docker/docker/layer"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/ioutils"
-	"github.com/docker/docker/reference"
 	containertypes "github.com/docker/engine-api/types/container"
 	"github.com/docker/go-connections/nat"
 )
@@ -225,7 +225,7 @@ func (daemon *Daemon) Commit(name string, c *backend.ContainerCommitConfig) (str
 	}
 
 	if c.Repo != "" {
-		newTag, err := reference.WithName(c.Repo) // todo: should move this to API layer
+		newTag, err := reference.NormalizedName(c.Repo) // todo: should move this to API layer
 		if err != nil {
 			return "", err
 		}

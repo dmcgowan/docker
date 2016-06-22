@@ -15,12 +15,13 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/digest"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/distribution/metadata"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/image/refstore"
 	imagev1 "github.com/docker/docker/image/v1"
 	"github.com/docker/docker/layer"
 	"github.com/docker/docker/pkg/ioutils"
-	"github.com/docker/docker/reference"
 )
 
 type graphIDRegistrar interface {
@@ -56,7 +57,7 @@ var (
 
 // Migrate takes an old graph directory and transforms the metadata into the
 // new format.
-func Migrate(root, driverName string, ls layer.Store, is image.Store, rs reference.Store, ms metadata.Store) error {
+func Migrate(root, driverName string, ls layer.Store, is image.Store, rs refstore.Store, ms metadata.Store) error {
 	graphDir := filepath.Join(root, graphDirName)
 	if _, err := os.Lstat(graphDir); os.IsNotExist(err) {
 		return nil
@@ -325,7 +326,7 @@ func migrateRefs(root, driverName string, rs refAdder, mappings map[string]image
 	for name, repo := range repos.Repositories {
 		for tag, id := range repo {
 			if strongID, exists := mappings[id]; exists {
-				ref, err := reference.WithName(name)
+				ref, err := reference.NormalizedName(name)
 				if err != nil {
 					logrus.Errorf("migrate tags: invalid name %q, %q", name, err)
 					continue

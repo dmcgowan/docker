@@ -10,12 +10,12 @@ import (
 	"strings"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types/backend"
 	"github.com/docker/docker/builder"
 	"github.com/docker/docker/builder/dockerfile/parser"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/stringid"
-	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/container"
 	"golang.org/x/net/context"
@@ -155,22 +155,17 @@ func sanitizeRepoAndTags(names []string) ([]reference.Named, error) {
 			continue
 		}
 
-		ref, err := reference.ParseNamed(repo)
+		ref, err := reference.NormalizedName(repo)
 		if err != nil {
 			return nil, err
 		}
-
-		ref = reference.WithDefaultTag(ref)
 
 		if _, isCanonical := ref.(reference.Canonical); isCanonical {
 			return nil, errors.New("build tag cannot contain a digest")
 		}
 
 		if _, isTagged := ref.(reference.NamedTagged); !isTagged {
-			ref, err = reference.WithTag(ref, reference.DefaultTag)
-			if err != nil {
-				return nil, err
-			}
+			ref = reference.EnsureTagged(ref)
 		}
 
 		nameWithTag := ref.String()

@@ -8,7 +8,7 @@ import (
 	"text/tabwriter"
 	"text/template"
 
-	"github.com/docker/docker/reference"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/utils/templates"
 	"github.com/docker/engine-api/types"
 )
@@ -218,21 +218,21 @@ virtual_size: {{.Size}}
 			repoDigests := map[string][]string{}
 
 			for _, refString := range append(image.RepoTags) {
-				ref, err := reference.ParseNamed(refString)
+				ref, err := reference.NormalizedName(refString)
 				if err != nil {
 					continue
 				}
 				if nt, ok := ref.(reference.NamedTagged); ok {
-					repoTags[ref.Name()] = append(repoTags[ref.Name()], nt.Tag())
+					repoTags[reference.FamiliarName(ref).Name()] = append(repoTags[reference.FamiliarName(ref).Name()], nt.Tag())
 				}
 			}
 			for _, refString := range append(image.RepoDigests) {
-				ref, err := reference.ParseNamed(refString)
+				ref, err := reference.NormalizedName(refString)
 				if err != nil {
 					continue
 				}
 				if c, ok := ref.(reference.Canonical); ok {
-					repoDigests[ref.Name()] = append(repoDigests[ref.Name()], c.Digest().String())
+					repoDigests[reference.FamiliarName(ref).Name()] = append(repoDigests[reference.FamiliarName(ref).Name()], c.Digest().String())
 				}
 			}
 

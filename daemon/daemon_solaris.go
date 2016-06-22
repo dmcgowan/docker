@@ -7,10 +7,10 @@ import (
 
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/image/refstore"
 	"github.com/docker/docker/layer"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/parsers/kernel"
-	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/types"
 	containertypes "github.com/docker/engine-api/types/container"
 	"github.com/docker/libnetwork"
@@ -139,7 +139,7 @@ func (daemon *Daemon) conditionalUnmountOnCleanup(container *container.Container
 	return daemon.Unmount(container)
 }
 
-func restoreCustomImage(is image.Store, ls layer.Store, rs reference.Store) error {
+func restoreCustomImage(is image.Store, ls layer.Store, rs refstore.Store) error {
 	// Solaris has no custom images to register
 	return nil
 }

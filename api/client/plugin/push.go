@@ -7,9 +7,9 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/client"
 	"github.com/docker/docker/cli"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/spf13/cobra"
 )
@@ -27,14 +27,15 @@ func newPushCommand(dockerCli *client.DockerCli) *cobra.Command {
 }
 
 func runPush(dockerCli *client.DockerCli, name string) error {
-	named, err := reference.ParseNamed(name) // FIXME: validate
+	named, err := reference.NormalizedName(name)
 	if err != nil {
 		return err
 	}
-	named = reference.WithDefaultTag(named)
-	ref, ok := named.(reference.NamedTagged)
-	if !ok {
+	if _, isCanonical := named.(reference.Canonical); isCanonical {
 		return fmt.Errorf("invalid name: %s", named.String())
+	}
+	if reference.IsNameOnly(named) {
+		named = reference.EnsureTagged(named)
 	}
 
 	ctx := context.Background()

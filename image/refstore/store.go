@@ -1,4 +1,4 @@
-package reference
+package refstore
 
 import (
 	"encoding/json"
@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/docker/distribution/digest"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/pkg/ioutils"
 )
@@ -22,18 +23,18 @@ var (
 
 // An Association is a tuple associating a reference with an image ID.
 type Association struct {
-	Ref     Named
+	Ref     reference.Named
 	ImageID image.ID
 }
 
 // Store provides the set of methods which can operate on a tag store.
 type Store interface {
-	References(id image.ID) []Named
-	ReferencesByName(ref Named) []Association
-	AddTag(ref Named, id image.ID, force bool) error
-	AddDigest(ref Canonical, id image.ID, force bool) error
-	Delete(ref Named) (bool, error)
-	Get(ref Named) (image.ID, error)
+	References(id image.ID) []reference.Named
+	ReferencesByName(ref reference.Named) []Association
+	AddTag(ref reference.Named, id image.ID, force bool) error
+	AddDigest(ref reference.Canonical, id image.ID, force bool) error
+	Delete(ref reference.Named) (bool, error)
+	Get(ref reference.Named) (image.ID, error)
 }
 
 type store struct {
@@ -45,14 +46,14 @@ type store struct {
 	Repositories map[string]repository
 	// referencesByIDCache is a cache of references indexed by ID, to speed
 	// up References.
-	referencesByIDCache map[image.ID]map[string]Named
+	referencesByIDCache map[image.ID]map[string]reference.Named
 }
 
 // Repository maps tags to image IDs. The key is a stringified Reference,
 // including the repository name.
 type repository map[string]image.ID
 
-type lexicalRefs []Named
+type lexicalRefs []reference.Named
 
 func (a lexicalRefs) Len() int           { return len(a) }
 func (a lexicalRefs) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
@@ -75,7 +76,7 @@ func NewReferenceStore(jsonPath string) (Store, error) {
 	store := &store{
 		jsonPath:            abspath,
 		Repositories:        make(map[string]repository),
-		referencesByIDCache: make(map[image.ID]map[string]Named),
+		referencesByIDCache: make(map[image.ID]map[string]reference.Named),
 	}
 	// Load the json file if it exists, otherwise create it.
 	if err := store.reload(); os.IsNotExist(err) {
@@ -90,30 +91,31 @@ func NewReferenceStore(jsonPath string) (Store, error) {
 
 // AddTag adds a tag reference to the store. If force is set to true, existing
 // references can be overwritten. This only works for tags, not digests.
-func (store *store) AddTag(ref Named, id image.ID, force bool) error {
-	if _, isCanonical := ref.(Canonical); isCanonical {
+func (store *store) AddTag(ref reference.Named, id image.ID, force bool) error {
+	if _, isCanonical := ref.(reference.Canonical); isCanonical {
 		return errors.New("refusing to create a tag with a digest reference")
 	}
-	return store.addReference(WithDefaultTag(ref), id, force)
+	return store.addReference(reference.EnsureTagged(ref), id, force)
 }
 
 // AddDigest adds a digest reference to the store.
-func (store *store) AddDigest(ref Canonical, id image.ID, force bool) error {
+func (store *store) AddDigest(ref reference.Canonical, id image.ID, force bool) error {
 	return store.addReference(ref, id, force)
 }
 
-func (store *store) addReference(ref Named, id image.ID, force bool) error {
-	if ref.Name() == string(digest.Canonical) {
+func (store *store) addReference(ref reference.Named, id image.ID, force bool) error {
+	familiarName := reference.FamiliarName(ref).Name()
+	if familiarName == string(digest.Canonical) {
 		return errors.New("refusing to create an ambiguous tag using digest algorithm as name")
 	}
 
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	repository, exists := store.Repositories[ref.Name()]
+	repository, exists := store.Repositories[familiarName]
 	if !exists || repository == nil {
 		repository = make(map[string]image.ID)
-		store.Repositories[ref.Name()] = repository
+		store.Repositories[familiarName] = repository
 	}
 
 	refStr := ref.String()
@@ -121,7 +123,7 @@ func (store *store) addReference(ref Named, id image.ID, force bool) error {
 
 	if exists {
 		// force only works for tags
-		if digested, isDigest := ref.(Canonical); isDigest {
+		if digested, isDigest := ref.(reference.Canonical); isDigest {
 			return fmt.Errorf("Cannot overwrite digest %s", digested.Digest().String())
 		}
 
@@ -139,7 +141,7 @@ func (store *store) addReference(ref Named, id image.ID, force bool) error {
 
 	repository[refStr] = id
 	if store.referencesByIDCache[id] == nil {
-		store.referencesByIDCache[id] = make(map[string]Named)
+		store.referencesByIDCache[id] = make(map[string]reference.Named)
 	}
 	store.referencesByIDCache[id][refStr] = ref
 
@@ -148,13 +150,15 @@ func (store *store) addReference(ref Named, id image.ID, force bool) error {
 
 // Delete deletes a reference from the store. It returns true if a deletion
 // happened, or false otherwise.
-func (store *store) Delete(ref Named) (bool, error) {
-	ref = WithDefaultTag(ref)
+func (store *store) Delete(ref reference.Named) (bool, error) {
+	if reference.IsNameOnly(ref) {
+		ref = reference.EnsureTagged(ref)
+	}
 
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	repoName := ref.Name()
+	repoName := reference.FamiliarName(ref).Name()
 
 	repository, exists := store.Repositories[repoName]
 	if !exists {
@@ -180,13 +184,15 @@ func (store *store) Delete(ref Named) (bool, error) {
 }
 
 // Get retrieves an item from the store by
-func (store *store) Get(ref Named) (image.ID, error) {
-	ref = WithDefaultTag(ref)
+func (store *store) Get(ref reference.Named) (image.ID, error) {
+	if reference.IsNameOnly(ref) {
+		ref = reference.EnsureTagged(ref)
+	}
 
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 
-	repository, exists := store.Repositories[ref.Name()]
+	repository, exists := store.Repositories[reference.FamiliarName(ref).Name()]
 	if !exists || repository == nil {
 		return "", ErrDoesNotExist
 	}
@@ -201,7 +207,7 @@ func (store *store) Get(ref Named) (image.ID, error) {
 
 // References returns a slice of references to the given image ID. The slice
 // will be nil if there are no references to this image ID.
-func (store *store) References(id image.ID) []Named {
+func (store *store) References(id image.ID) []reference.Named {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 
@@ -209,7 +215,7 @@ func (store *store) References(id image.ID) []Named {
 	// 1) We must not return a mutable
 	// 2) It would be ugly to expose the extraneous map keys to callers.
 
-	var references []Named
+	var references []reference.Named
 	for _, ref := range store.referencesByIDCache[id] {
 		references = append(references, ref)
 	}
@@ -222,18 +228,18 @@ func (store *store) References(id image.ID) []Named {
 // ReferencesByName returns the references for a given repository name.
 // If there are no references known for this repository name,
 // ReferencesByName returns nil.
-func (store *store) ReferencesByName(ref Named) []Association {
+func (store *store) ReferencesByName(ref reference.Named) []Association {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 
-	repository, exists := store.Repositories[ref.Name()]
+	repository, exists := store.Repositories[reference.FamiliarName(ref).Name()]
 	if !exists {
 		return nil
 	}
 
 	var associations []Association
 	for refStr, refID := range repository {
-		ref, err := ParseNamed(refStr)
+		ref, err := reference.NormalizedName(refStr)
 		if err != nil {
 			// Should never happen
 			return nil
@@ -271,13 +277,13 @@ func (store *store) reload() error {
 
 	for _, repository := range store.Repositories {
 		for refStr, refID := range repository {
-			ref, err := ParseNamed(refStr)
+			ref, err := reference.NormalizedName(refStr)
 			if err != nil {
 				// Should never happen
 				continue
 			}
 			if store.referencesByIDCache[refID] == nil {
-				store.referencesByIDCache[refID] = make(map[string]Named)
+				store.referencesByIDCache[refID] = make(map[string]reference.Named)
 			}
 			store.referencesByIDCache[refID][refStr] = ref
 		}

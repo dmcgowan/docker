@@ -7,9 +7,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/opts"
 	flag "github.com/docker/docker/pkg/mflag"
-	"github.com/docker/docker/reference"
 	registrytypes "github.com/docker/engine-api/types/registry"
 )
 
@@ -197,13 +197,11 @@ func ValidateMirror(val string) (string, error) {
 
 // ValidateIndexName validates an index name.
 func ValidateIndexName(val string) (string, error) {
-	if val == reference.LegacyDefaultHostname {
-		val = reference.DefaultHostname
+	ref, err := reference.NormalizedName(val + "/ignored")
+	if err != nil {
+		return "", fmt.Errorf("invalid index name %q: %s", val, err)
 	}
-	if strings.HasPrefix(val, "-") || strings.HasSuffix(val, "-") {
-		return "", fmt.Errorf("Invalid index name (%s). Cannot begin or end with a hyphen.", val)
-	}
-	return val, nil
+	return reference.Domain(ref), nil
 }
 
 func validateNoScheme(reposName string) error {
@@ -248,11 +246,11 @@ func GetAuthConfigKey(index *registrytypes.IndexInfo) string {
 
 // newRepositoryInfo validates and breaks down a repository name into a RepositoryInfo
 func newRepositoryInfo(config *serviceConfig, name reference.Named) (*RepositoryInfo, error) {
-	index, err := newIndexInfo(config, name.Hostname())
+	index, err := newIndexInfo(config, reference.Domain(name))
 	if err != nil {
 		return nil, err
 	}
-	official := !strings.ContainsRune(name.Name(), '/')
+	official := !strings.ContainsRune(reference.FamiliarName(name).Name(), '/')
 	return &RepositoryInfo{name, index, official}, nil
 }
 

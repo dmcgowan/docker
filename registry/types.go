@@ -1,7 +1,7 @@
 package registry
 
 import (
-	"github.com/docker/docker/reference"
+	"github.com/docker/distribution/reference"
 	registrytypes "github.com/docker/engine-api/types/registry"
 )
 
@@ -67,4 +67,16 @@ type RepositoryInfo struct {
 	// If the registry is official, and the normalized name does not
 	// contain a '/' (e.g. "foo"), then it is considered an official repo.
 	Official bool
+}
+
+func (repoInfo *RepositoryInfo) FamiliarName() string {
+	return reference.FamiliarName(repoInfo.Named).Name()
+}
+
+func (repoInfo *RepositoryInfo) Domain() string {
+	return reference.Domain(repoInfo.Named)
+}
+
+func (repoInfo *RepositoryInfo) Path() string {
+	return reference.Path(repoInfo.Named)
 }

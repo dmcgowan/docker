@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/builder/dockerfile"
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/image"
@@ -17,7 +18,6 @@ import (
 	"github.com/docker/docker/pkg/httputils"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/streamformatter"
-	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/types/container"
 )
 
@@ -35,7 +35,7 @@ func (daemon *Daemon) ImportImage(src string, repository, tag string, msg string
 
 	if repository != "" {
 		var err error
-		newRef, err = reference.ParseNamed(repository)
+		newRef, err = reference.NormalizedName(repository)
 		if err != nil {
 			return err
 		}

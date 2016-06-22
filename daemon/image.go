@@ -3,9 +3,9 @@ package daemon
 import (
 	"fmt"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/builder"
 	"github.com/docker/docker/image"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/runconfig"
 	containertypes "github.com/docker/engine-api/types/container"
 )
@@ -22,24 +22,29 @@ func (e ErrImageDoesNotExist) Error() string {
 // GetImageID returns an image ID corresponding to the image referred to by
 // refOrID.
 func (daemon *Daemon) GetImageID(refOrID string) (image.ID, error) {
-	id, ref, err := reference.ParseIDOrReference(refOrID)
+	ref, err := reference.ParseAnyReference(refOrID)
 	if err != nil {
 		return "", err
 	}
-	if id != "" {
-		if _, err := daemon.imageStore.Get(image.ID(id)); err != nil {
+	named, isNamed := ref.(reference.Named)
+	if dgst, ok := ref.(reference.Digested); ok && !isNamed {
+		id := image.ID(dgst.Digest())
+		if _, err := daemon.imageStore.Get(id); err != nil {
 			return "", ErrImageDoesNotExist{refOrID}
 		}
-		return image.ID(id), nil
-	}
-
-	if id, err := daemon.referenceStore.Get(ref); err == nil {
 		return id, nil
 	}
-	if tagged, ok := ref.(reference.NamedTagged); ok {
+	if !isNamed {
+		return "", fmt.Errorf("invalid reference: %s", refOrID)
+	}
+
+	if id, err := daemon.referenceStore.Get(named); err == nil {
+		return id, nil
+	}
+	if tagged, ok := named.(reference.NamedTagged); ok {
 		if id, err := daemon.imageStore.Search(tagged.Tag()); err == nil {
 			for _, namedRef := range daemon.referenceStore.References(id) {
-				if namedRef.Name() == ref.Name() {
+				if namedRef.Name() == named.Name() {
 					return id, nil
 				}
 			}

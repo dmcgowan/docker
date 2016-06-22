@@ -11,12 +11,12 @@ import (
 
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/digest"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/image/v1"
 	"github.com/docker/docker/layer"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/system"
-	"github.com/docker/docker/reference"
 )
 
 type imageDescriptor struct {
@@ -55,10 +55,7 @@ func (l *tarexporter) parseNames(names []string) (map[image.ID]*imageDescriptor,
 			}
 			var ok bool
 			if tagged, ok = ref.(reference.NamedTagged); !ok {
-				var err error
-				if tagged, err = reference.WithTag(ref, reference.DefaultTag); err != nil {
-					return
-				}
+				tagged = reference.EnsureTagged(tagged)
 			}
 
 			for _, t := range imgDescr[id].refs {
@@ -71,19 +68,29 @@ func (l *tarexporter) parseNames(names []string) (map[image.ID]*imageDescriptor,
 	}
 
 	for _, name := range names {
-		id, ref, err := reference.ParseIDOrReference(name)
+		ref, err := reference.ParseAnyReference(name)
 		if err != nil {
 			return nil, err
 		}
-		if id != "" {
-			_, err := l.is.Get(image.ID(id))
+
+		named, isNamed := ref.(reference.Named)
+		if dgst, ok := ref.(reference.Digested); ok && !isNamed {
+			id := image.ID(dgst.Digest())
+			_, err := l.is.Get(id)
 			if err != nil {
 				return nil, err
 			}
-			addAssoc(image.ID(id), nil)
+			addAssoc(id, nil)
 			continue
 		}
-		if ref.Name() == string(digest.Canonical) {
+		if !isNamed {
+			// This should be unreachable since since there is no
+			// non-digest unnamed type
+			return nil, fmt.Errorf("invalid name: %s", name)
+		}
+
+		// TODO: This should already be handled by ParseAnyReference
+		if reference.FamiliarName(named).Name() == string(digest.Canonical) {
 			imgID, err := l.is.Search(name)
 			if err != nil {
 				return nil, err
@@ -91,8 +98,8 @@ func (l *tarexporter) parseNames(names []string) (map[image.ID]*imageDescriptor,
 			addAssoc(imgID, nil)
 			continue
 		}
-		if reference.IsNameOnly(ref) {
-			assocs := l.rs.ReferencesByName(ref)
+		if reference.IsNameOnly(named) {
+			assocs := l.rs.ReferencesByName(named)
 			for _, assoc := range assocs {
 				addAssoc(assoc.ImageID, assoc.Ref)
 			}
@@ -106,10 +113,10 @@ func (l *tarexporter) parseNames(names []string) (map[image.ID]*imageDescriptor,
 			continue
 		}
 		var imgID image.ID
-		if imgID, err = l.rs.Get(ref); err != nil {
+		if imgID, err = l.rs.Get(named); err != nil {
 			return nil, err
 		}
-		addAssoc(imgID, ref)
+		addAssoc(imgID, named)
 
 	}
 	return imgDescr, nil

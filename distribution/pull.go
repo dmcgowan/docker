@@ -4,12 +4,13 @@ import (
 	"fmt"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/distribution/metadata"
 	"github.com/docker/docker/distribution/xfer"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/image/refstore"
 	"github.com/docker/docker/pkg/progress"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
@@ -36,7 +37,7 @@ type ImagePullConfig struct {
 	// ImageStore manages images.
 	ImageStore image.Store
 	// ReferenceStore manages tags.
-	ReferenceStore reference.Store
+	ReferenceStore refstore.Store
 	// DownloadManager manages concurrent pulls.
 	DownloadManager *xfer.LayerDownloadManager
 }
@@ -88,7 +89,7 @@ func Pull(ctx context.Context, ref reference.Named, imagePullConfig *ImagePullCo
 		return err
 	}
 
-	endpoints, err := imagePullConfig.RegistryService.LookupPullEndpoints(repoInfo.Hostname())
+	endpoints, err := imagePullConfig.RegistryService.LookupPullEndpoints(repoInfo.Domain())
 	if err != nil {
 		return err
 	}
@@ -128,7 +129,7 @@ func Pull(ctx context.Context, ref reference.Named, imagePullConfig *ImagePullCo
 			}
 		}
 
-		logrus.Debugf("Trying to pull %s from %s %s", repoInfo.Name(), endpoint.URL, endpoint.Version)
+		logrus.Debugf("Trying to pull %s from %s %s", repoInfo.FamiliarName(), endpoint.URL, endpoint.Version)
 
 		puller, err := newPuller(endpoint, repoInfo, imagePullConfig)
 		if err != nil {
@@ -170,7 +171,7 @@ func Pull(ctx context.Context, ref reference.Named, imagePullConfig *ImagePullCo
 			return err
 		}
 
-		imagePullConfig.ImageEventLogger(ref.String(), repoInfo.Name(), "pull")
+		imagePullConfig.ImageEventLogger(ref.String(), repoInfo.FamiliarName(), "pull")
 		return nil
 	}
 

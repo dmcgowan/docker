@@ -20,13 +20,13 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/digest"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/client/auth"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/docker/docker/cliconfig"
 	"github.com/docker/docker/distribution"
 	"github.com/docker/docker/pkg/jsonmessage"
 	flag "github.com/docker/docker/pkg/mflag"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/engine-api/types"
 	registrytypes "github.com/docker/engine-api/types/registry"
@@ -195,13 +195,13 @@ func (cli *DockerCli) getNotaryRepository(repoInfo *registry.RepositoryInfo, aut
 	}
 
 	creds := simpleCredentialStore{auth: authConfig}
-	tokenHandler := auth.NewTokenHandler(authTransport, creds, repoInfo.FullName(), actions...)
+	tokenHandler := auth.NewTokenHandler(authTransport, creds, repoInfo.Name(), actions...)
 	basicHandler := auth.NewBasicHandler(creds)
 	modifiers = append(modifiers, transport.RequestModifier(auth.NewAuthorizer(challengeManager, tokenHandler, basicHandler)))
 	tr := transport.NewTransport(base, modifiers...)
 
 	return client.NewNotaryRepository(
-		cli.trustDirectory(), repoInfo.FullName(), server, tr, cli.getPassphraseRetriever(),
+		cli.trustDirectory(), repoInfo.Name(), server, tr, cli.getPassphraseRetriever(),
 		trustpinning.TrustPinConfig{})
 }
 
@@ -267,7 +267,7 @@ func (cli *DockerCli) TrustedReference(ctx context.Context, ref reference.NamedT
 	// Only list tags in the top level targets role or the releases delegation role - ignore
 	// all other delegation roles
 	if t.Role != releasesRole && t.Role != data.CanonicalTargetsRole {
-		return nil, notaryError(repoInfo.FullName(), fmt.Errorf("No trust data for %s", ref.Tag()))
+		return nil, notaryError(repoInfo.Name(), fmt.Errorf("No trust data for %s", ref.Tag()))
 	}
 	r, err := convertTarget(t.Target)
 	if err != nil {
@@ -329,12 +329,12 @@ func (cli *DockerCli) TrustedPull(ctx context.Context, repoInfo *registry.Reposi
 		// List all targets
 		targets, err := notaryRepo.ListTargets(releasesRole, data.CanonicalTargetsRole)
 		if err != nil {
-			return notaryError(repoInfo.FullName(), err)
+			return notaryError(repoInfo.Name(), err)
 		}
 		for _, tgt := range targets {
 			t, err := convertTarget(tgt.Target)
 			if err != nil {
-				fmt.Fprintf(cli.out, "Skipping target for %q\n", repoInfo.Name())
+				fmt.Fprintf(cli.out, "Skipping target for %q\n", repoInfo.FamiliarName())
 				continue
 			}
 			// Only list tags in the top level targets role or the releases delegation role - ignore
@@ -345,17 +345,17 @@ func (cli *DockerCli) TrustedPull(ctx context.Context, repoInfo *registry.Reposi
 			refs = append(refs, t)
 		}
 		if len(refs) == 0 {
-			return notaryError(repoInfo.FullName(), fmt.Errorf("No trusted tags for %s", repoInfo.FullName()))
+			return notaryError(repoInfo.Name(), fmt.Errorf("No trusted tags for %s", repoInfo.Name()))
 		}
 	} else {
 		t, err := notaryRepo.GetTargetByName(ref.String(), releasesRole, data.CanonicalTargetsRole)
 		if err != nil {
-			return notaryError(repoInfo.FullName(), err)
+			return notaryError(repoInfo.Name(), err)
 		}
 		// Only get the tag if it's in the top level targets role or the releases delegation role
 		// ignore it if it's in any other delegation roles
 		if t.Role != releasesRole && t.Role != data.CanonicalTargetsRole {
-			return notaryError(repoInfo.FullName(), fmt.Errorf("No trust data for %s", ref.String()))
+			return notaryError(repoInfo.Name(), fmt.Errorf("No trust data for %s", ref.String()))
 		}
 
 		logrus.Debugf("retrieving target for %s role\n", t.Role)
@@ -496,15 +496,15 @@ func (cli *DockerCli) TrustedPush(ctx context.Context, repoInfo *registry.Reposi
 
 		// Initialize the notary repository with a remotely managed snapshot key
 		if err := repo.Initialize(rootKeyID, data.CanonicalSnapshotRole); err != nil {
-			return notaryError(repoInfo.FullName(), err)
+			return notaryError(repoInfo.Name(), err)
 		}
-		fmt.Fprintf(cli.out, "Finished initializing %q\n", repoInfo.FullName())
+		fmt.Fprintf(cli.out, "Finished initializing %q\n", repoInfo.Name())
 		err = repo.AddTarget(target, data.CanonicalTargetsRole)
 	case nil:
 		// already initialized and we have successfully downloaded the latest metadata
 		err = cli.addTargetToAllSignableRoles(repo, target)
 	default:
-		return notaryError(repoInfo.FullName(), err)
+		return notaryError(repoInfo.Name(), err)
 	}
 
 	if err == nil {
@@ -512,11 +512,11 @@ func (cli *DockerCli) TrustedPush(ctx context.Context, repoInfo *registry.Reposi
 	}
 
 	if err != nil {
-		fmt.Fprintf(cli.out, "Failed to sign %q:%s - %s\n", repoInfo.FullName(), tag, err.Error())
-		return notaryError(repoInfo.FullName(), err)
+		fmt.Fprintf(cli.out, "Failed to sign %q:%s - %s\n", repoInfo.Name(), tag, err.Error())
+		return notaryError(repoInfo.Name(), err)
 	}
 
-	fmt.Fprintf(cli.out, "Successfully signed %q:%s\n", repoInfo.FullName(), tag)
+	fmt.Fprintf(cli.out, "Successfully signed %q:%s\n", repoInfo.Name(), tag)
 	return nil
 }
 

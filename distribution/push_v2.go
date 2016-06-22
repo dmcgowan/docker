@@ -11,7 +11,7 @@ import (
 	"github.com/docker/distribution/digest"
 	"github.com/docker/distribution/manifest/schema1"
 	"github.com/docker/distribution/manifest/schema2"
-	distreference "github.com/docker/distribution/reference"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/client"
 	"github.com/docker/docker/distribution/metadata"
 	"github.com/docker/docker/distribution/xfer"
@@ -20,7 +20,6 @@ import (
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/stringid"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"golang.org/x/net/context"
 )
@@ -105,7 +104,7 @@ func (p *v2Pusher) pushV2Repository(ctx context.Context) (err error) {
 	}
 
 	if pushed == 0 {
-		return fmt.Errorf("no tags to push for %s", p.repoInfo.Name())
+		return fmt.Errorf("no tags to push for %s", p.repoInfo.FamiliarName())
 	}
 
 	return nil
@@ -170,7 +169,7 @@ func (p *v2Pusher) pushV2Tag(ctx context.Context, ref reference.NamedTagged, ima
 	if _, err = manSvc.Put(ctx, manifest, putOptions...); err != nil {
 		logrus.Warnf("failed to upload schema2 manifest: %v - falling back to schema1", err)
 
-		manifestRef, err := distreference.WithTag(p.repo.Named(), ref.Tag())
+		manifestRef, err := reference.WithTag(p.repo.Named(), ref.Tag())
 		if err != nil {
 			return err
 		}
@@ -293,16 +292,16 @@ func (pd *v2PushDescriptor) Upload(ctx context.Context, progressOutput progress.
 	for i := len(v2Metadata) - 1; i >= 0 && mountAttemptsRemaining > 0; i-- {
 		mountFrom := v2Metadata[i]
 
-		sourceRepo, err := reference.ParseNamed(mountFrom.SourceRepository)
+		sourceRepo, err := reference.NormalizedName(mountFrom.SourceRepository)
 		if err != nil {
 			continue
 		}
-		if pd.repoInfo.Hostname() != sourceRepo.Hostname() {
+		if reference.Domain(pd.repoInfo) != reference.Domain(sourceRepo) {
 			// don't mount blobs from another registry
 			continue
 		}
 
-		namedRef, err := reference.WithName(mountFrom.SourceRepository)
+		namedRef, err := reference.NormalizedName(mountFrom.SourceRepository)
 		if err != nil {
 			continue
 		}
@@ -310,17 +309,17 @@ func (pd *v2PushDescriptor) Upload(ctx context.Context, progressOutput progress.
 		// TODO (brianbland): We need to construct a reference where the Name is
 		// only the full remote name, so clean this up when distribution has a
 		// richer reference package
-		remoteRef, err := distreference.WithName(namedRef.RemoteName())
+		remoteRef, err := reference.WithName(reference.Path(namedRef))
 		if err != nil {
 			continue
 		}
 
-		canonicalRef, err := distreference.WithDigest(remoteRef, mountFrom.Digest)
+		canonicalRef, err := reference.WithDigest(remoteRef, mountFrom.Digest)
 		if err != nil {
 			continue
 		}
 
-		logrus.Debugf("attempting to mount layer %s (%s) from %s", diffID, mountFrom.Digest, sourceRepo.FullName())
+		logrus.Debugf("attempting to mount layer %s (%s) from %s", diffID, mountFrom.Digest, sourceRepo.Name())
 
 		layerUpload, err = bs.Create(ctx, client.WithMountFrom(canonicalRef))
 		switch err := err.(type) {
@@ -335,7 +334,7 @@ func (pd *v2PushDescriptor) Upload(ctx context.Context, progressOutput progress.
 			pd.pushState.Unlock()
 
 			// Cache mapping from this layer's DiffID to the blobsum
-			if err := pd.v2MetadataService.Add(diffID, metadata.V2Metadata{Digest: mountFrom.Digest, SourceRepository: pd.repoInfo.FullName()}); err != nil {
+			if err := pd.v2MetadataService.Add(diffID, metadata.V2Metadata{Digest: mountFrom.Digest, SourceRepository: pd.repoInfo.Name()}); err != nil {
 				return distribution.Descriptor{}, xfer.DoNotRetry{Err: err}
 			}
 			return err.Descriptor, nil
@@ -391,7 +390,7 @@ func (pd *v2PushDescriptor) Upload(ctx context.Context, progressOutput progress.
 	progress.Update(progressOutput, pd.ID(), "Pushed")
 
 	// Cache mapping from this layer's DiffID to the blobsum
-	if err := pd.v2MetadataService.Add(diffID, metadata.V2Metadata{Digest: pushDigest, SourceRepository: pd.repoInfo.FullName()}); err != nil {
+	if err := pd.v2MetadataService.Add(diffID, metadata.V2Metadata{Digest: pushDigest, SourceRepository: pd.repoInfo.Name()}); err != nil {
 		return distribution.Descriptor{}, xfer.DoNotRetry{Err: err}
 	}
 
@@ -427,7 +426,7 @@ func (pd *v2PushDescriptor) Descriptor() distribution.Descriptor {
 func layerAlreadyExists(ctx context.Context, metadata []metadata.V2Metadata, repoInfo reference.Named, repo distribution.Repository, pushState *pushState) (distribution.Descriptor, bool, error) {
 	for _, meta := range metadata {
 		// Only check blobsums that are known to this repository or have an unknown source
-		if meta.SourceRepository != "" && meta.SourceRepository != repoInfo.FullName() {
+		if meta.SourceRepository != "" && meta.SourceRepository != repoInfo.Name() {
 			continue
 		}
 		descriptor, err := repo.Blobs(ctx).Stat(ctx, meta.Digest)

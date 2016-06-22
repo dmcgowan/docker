@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/distribution/reference"
 	clustertypes "github.com/docker/docker/daemon/cluster/provider"
-	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/types"
 	enginecontainer "github.com/docker/engine-api/types/container"
 	"github.com/docker/engine-api/types/network"
@@ -80,11 +80,14 @@ func (c *containerConfig) name() string {
 
 func (c *containerConfig) image() string {
 	raw := c.spec().Image
-	ref, err := reference.ParseNamed(raw)
+	ref, err := reference.NormalizedName(raw)
 	if err != nil {
 		return raw
 	}
-	return reference.WithDefaultTag(ref).String()
+	if reference.IsNameOnly(ref) {
+		ref = reference.EnsureTagged(ref)
+	}
+	return ref.String()
 }
 
 func (c *containerConfig) volumes() map[string]struct{} {

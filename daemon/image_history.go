@@ -3,8 +3,8 @@ package daemon
 import (
 	"fmt"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/layer"
-	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/types"
 )
 

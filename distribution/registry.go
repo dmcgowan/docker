@@ -38,10 +38,10 @@ func (dcs dumbCredentialStore) SetRefreshToken(*url.URL, string, string) {
 // providing timeout settings and authentication support, and also verifies the
 // remote API version.
 func NewV2Repository(ctx context.Context, repoInfo *registry.RepositoryInfo, endpoint registry.APIEndpoint, metaHeaders http.Header, authConfig *types.AuthConfig, actions ...string) (repo distribution.Repository, foundVersion bool, err error) {
-	repoName := repoInfo.FullName()
+	repoName := repoInfo.Name()
 	// If endpoint does not support CanonicalName, use the RemoteName instead
 	if endpoint.TrimHostname {
-		repoName = repoInfo.RemoteName()
+		repoName = repoInfo.Path()
 	}
 
 	direct := &net.Dialer{

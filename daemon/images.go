@@ -5,9 +5,9 @@ import (
 	"path"
 	"sort"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/layer"
-	"github.com/docker/docker/reference"
 	"github.com/docker/engine-api/types"
 	"github.com/docker/engine-api/types/filters"
 )
@@ -86,7 +86,7 @@ func (daemon *Daemon) Images(filterArgs, filter string, all bool) ([]*types.Imag
 
 	var filterTagged bool
 	if filter != "" {
-		filterRef, err := reference.ParseNamed(filter)
+		filterRef, err := reference.NormalizedName(filter)
 		if err == nil { // parse error means wildcard repo
 			if _, ok := filterRef.(reference.NamedTagged); ok {
 				filterTagged = true
@@ -141,7 +141,7 @@ func (daemon *Daemon) Images(filterArgs, filter string, all bool) ([]*types.Imag
 					if ref.String() != filter {
 						continue
 					}
-				} else if matched, err := path.Match(filter, ref.Name()); !matched || err != nil { // name only match, FIXME: docs say exact
+				} else if matched, err := path.Match(filter, reference.FamiliarName(ref).Name()); !matched || err != nil { // name only match, FIXME: docs say exact
 					continue
 				}
 			}

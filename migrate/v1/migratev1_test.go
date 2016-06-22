@@ -14,10 +14,10 @@ import (
 	"testing"
 
 	"github.com/docker/distribution/digest"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/distribution/metadata"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/layer"
-	"github.com/docker/docker/reference"
 )
 
 func TestMigrateRefs(t *testing.T) {

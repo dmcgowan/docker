@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/client"
 	"github.com/docker/docker/cli"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/engine-api/types"
 	"github.com/spf13/cobra"
@@ -40,14 +40,15 @@ func newInstallCommand(dockerCli *client.DockerCli) *cobra.Command {
 }
 
 func runInstall(dockerCli *client.DockerCli, opts pluginOptions) error {
-	named, err := reference.ParseNamed(opts.name) // FIXME: validate
+	named, err := reference.NormalizedName(opts.name)
 	if err != nil {
 		return err
 	}
-	named = reference.WithDefaultTag(named)
-	ref, ok := named.(reference.NamedTagged)
-	if !ok {
+	if _, isCanonical := named.(reference.Canonical); isCanonical {
 		return fmt.Errorf("invalid name: %s", named.String())
+	}
+	if reference.IsNameOnly(named) {
+		ref = reference.EnsureTagged(named)
 	}
 
 	ctx := context.Background()

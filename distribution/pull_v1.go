@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/distribution/registry/client/transport"
 	"github.com/docker/docker/distribution/metadata"
 	"github.com/docker/docker/distribution/xfer"
@@ -22,7 +23,6 @@ import (
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/stringid"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"golang.org/x/net/context"
 )
@@ -67,13 +67,13 @@ func (p *v1Puller) Pull(ctx context.Context, ref reference.Named) error {
 		// TODO(dmcgowan): Check if should fallback
 		return err
 	}
-	progress.Message(p.config.ProgressOutput, "", p.repoInfo.FullName()+": this image was pulled from a legacy registry.  Important: This registry version will not be supported in future versions of docker.")
+	progress.Message(p.config.ProgressOutput, "", p.repoInfo.Name()+": this image was pulled from a legacy registry.  Important: This registry version will not be supported in future versions of docker.")
 
 	return nil
 }
 
 func (p *v1Puller) pullRepository(ctx context.Context, ref reference.Named) error {
-	progress.Message(p.config.ProgressOutput, "", "Pulling repository "+p.repoInfo.FullName())
+	progress.Message(p.config.ProgressOutput, "", "Pulling repository "+p.repoInfo.Name())
 
 	tagged, isTagged := ref.(reference.NamedTagged)
 
@@ -81,9 +81,9 @@ func (p *v1Puller) pullRepository(ctx context.Context, ref reference.Named) erro
 	if err != nil {
 		if strings.Contains(err.Error(), "HTTP code: 404") {
 			if isTagged {
-				return fmt.Errorf("Error: image %s:%s not found", p.repoInfo.RemoteName(), tagged.Tag())
+				return fmt.Errorf("Error: image %s:%s not found", p.repoInfo.Path(), tagged.Tag())
 			}
-			return fmt.Errorf("Error: image %s not found", p.repoInfo.RemoteName())
+			return fmt.Errorf("Error: image %s not found", p.repoInfo.Path())
 		}
 		// Unexpected HTTP error
 		return err
@@ -98,7 +98,7 @@ func (p *v1Puller) pullRepository(ctx context.Context, ref reference.Named) erro
 		tagsList = make(map[string]string)
 		tagID, err = p.session.GetRemoteTag(repoData.Endpoints, p.repoInfo, tagged.Tag())
 		if err == registry.ErrRepoNotFound {
-			return fmt.Errorf("Tag %s not found in repository %s", tagged.Tag(), p.repoInfo.FullName())
+			return fmt.Errorf("Tag %s not found in repository %s", tagged.Tag(), p.repoInfo.Name())
 		}
 		tagsList[tagged.Tag()] = tagID
 	}
@@ -148,15 +148,15 @@ func (p *v1Puller) downloadImage(ctx context.Context, repoData *registry.Reposit
 		return err
 	}
 
-	progress.Updatef(p.config.ProgressOutput, stringid.TruncateID(img.ID), "Pulling image (%s) from %s", img.Tag, p.repoInfo.FullName())
+	progress.Updatef(p.config.ProgressOutput, stringid.TruncateID(img.ID), "Pulling image (%s) from %s", img.Tag, p.repoInfo.Name())
 	success := false
 	var lastErr error
 	for _, ep := range p.repoInfo.Index.Mirrors {
 		ep += "v1/"
-		progress.Updatef(p.config.ProgressOutput, stringid.TruncateID(img.ID), fmt.Sprintf("Pulling image (%s) from %s, mirror: %s", img.Tag, p.repoInfo.FullName(), ep))
+		progress.Updatef(p.config.ProgressOutput, stringid.TruncateID(img.ID), fmt.Sprintf("Pulling image (%s) from %s, mirror: %s", img.Tag, p.repoInfo.Name(), ep))
 		if err = p.pullImage(ctx, img.ID, ep, localNameRef, layersDownloaded); err != nil {
 			// Don't report errors when pulling from mirrors.
-			logrus.Debugf("Error pulling image (%s) from %s, mirror: %s, %s", img.Tag, p.repoInfo.FullName(), ep, err)
+			logrus.Debugf("Error pulling image (%s) from %s, mirror: %s, %s", img.Tag, p.repoInfo.Name(), ep, err)
 			continue
 		}
 		success = true
@@ -164,12 +164,12 @@ func (p *v1Puller) downloadImage(ctx context.Context, repoData *registry.Reposit
 	}
 	if !success {
 		for _, ep := range repoData.Endpoints {
-			progress.Updatef(p.config.ProgressOutput, stringid.TruncateID(img.ID), "Pulling image (%s) from %s, endpoint: %s", img.Tag, p.repoInfo.FullName(), ep)
+			progress.Updatef(p.config.ProgressOutput, stringid.TruncateID(img.ID), "Pulling image (%s) from %s, endpoint: %s", img.Tag, p.repoInfo.Name(), ep)
 			if err = p.pullImage(ctx, img.ID, ep, localNameRef, layersDownloaded); err != nil {
 				// It's not ideal that only the last error is returned, it would be better to concatenate the errors.
 				// As the error is also given to the output stream the user will see the error.
 				lastErr = err
-				progress.Updatef(p.config.ProgressOutput, stringid.TruncateID(img.ID), "Error pulling image (%s) from %s, endpoint: %s, %s", img.Tag, p.repoInfo.FullName(), ep, err)
+				progress.Updatef(p.config.ProgressOutput, stringid.TruncateID(img.ID), "Error pulling image (%s) from %s, endpoint: %s, %s", img.Tag, p.repoInfo.Name(), ep, err)
 				continue
 			}
 			success = true
@@ -177,7 +177,7 @@ func (p *v1Puller) downloadImage(ctx context.Context, repoData *registry.Reposit
 		}
 	}
 	if !success {
-		err := fmt.Errorf("Error pulling image (%s) from %s, %v", img.Tag, p.repoInfo.FullName(), lastErr)
+		err := fmt.Errorf("Error pulling image (%s) from %s, %v", img.Tag, p.repoInfo.Name(), lastErr)
 		progress.Update(p.config.ProgressOutput, stringid.TruncateID(img.ID), err.Error())
 		return err
 	}

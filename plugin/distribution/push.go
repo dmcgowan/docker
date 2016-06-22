@@ -11,8 +11,8 @@ import (
 	"github.com/docker/distribution"
 	"github.com/docker/distribution/digest"
 	"github.com/docker/distribution/manifest/schema2"
+	"github.com/docker/distribution/reference"
 	dockerdist "github.com/docker/docker/distribution"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/engine-api/types"
 	"golang.org/x/net/context"
@@ -20,7 +20,7 @@ import (
 
 // Push pushes a plugin to a registry.
 func Push(name string, rs registry.Service, metaHeader http.Header, authConfig *types.AuthConfig, config io.ReadCloser, layers io.ReadCloser) (digest.Digest, error) {
-	ref, err := reference.ParseNamed(name)
+	ref, err := reference.NormalizedName(name)
 	if err != nil {
 		return "", err
 	}
@@ -30,11 +30,11 @@ func Push(name string, rs registry.Service, metaHeader http.Header, authConfig *
 		return "", err
 	}
 
-	if err := dockerdist.ValidateRepoName(repoInfo.Name()); err != nil {
+	if err := dockerdist.ValidateRepoName(repoInfo.FamiliarName()); err != nil {
 		return "", err
 	}
 
-	endpoints, err := rs.LookupPushEndpoints(repoInfo.Hostname())
+	endpoints, err := rs.LookupPushEndpoints(repoInfo.Domain())
 	if err != nil {
 		return "", err
 	}
@@ -53,7 +53,7 @@ func Push(name string, rs registry.Service, metaHeader http.Header, authConfig *
 		if !confirmedV2 {
 			return "", ErrUnSupportedRegistry
 		}
-		logrus.Debugf("Trying to push %s to %s %s", repoInfo.Name(), endpoint.URL, endpoint.Version)
+		logrus.Debugf("Trying to push %s to %s %s", repoInfo.FamiliarName(), endpoint.URL, endpoint.Version)
 		// This means that we found an endpoint. and we are ready to push
 		break
 	}

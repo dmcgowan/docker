@@ -1,7 +1,7 @@
 package events
 
 import (
-	"github.com/docker/docker/reference"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/engine-api/types/events"
 	"github.com/docker/engine-api/types/filters"
 )
@@ -79,9 +79,9 @@ func (ef *Filter) matchImage(ev events.Message) bool {
 }
 
 func stripTag(image string) string {
-	ref, err := reference.ParseNamed(image)
+	ref, err := reference.NormalizedName(image)
 	if err != nil {
 		return image
 	}
-	return ref.Name()
+	return reference.FamiliarName(ref).Name()
 }

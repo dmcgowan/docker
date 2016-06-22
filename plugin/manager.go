@@ -13,10 +13,10 @@ import (
 	"sync"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/libcontainerd"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/plugins"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/restartmanager"
 	"github.com/docker/engine-api/types"
@@ -69,7 +69,7 @@ func (p *plugin) Name() string {
 func (pm *Manager) newPlugin(ref reference.Named, id string) *plugin {
 	p := &plugin{
 		P: types.Plugin{
-			Name: ref.Name(),
+			Name: reference.FamiliarName(ref),
 			ID:   id,
 		},
 		stateSourcePath:   filepath.Join(pm.libRoot, id, "state"),

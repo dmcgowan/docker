@@ -1,4 +1,4 @@
-package reference
+package refstore
 
 import (
 	"bytes"

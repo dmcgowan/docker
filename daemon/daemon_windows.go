@@ -11,17 +11,18 @@ import (
 
 	"github.com/Microsoft/hcsshim"
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/daemon/graphdriver/windows" // register the windows graph driver
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/image"
+	"github.com/docker/docker/image/refstore"
 	"github.com/docker/docker/layer"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/parsers"
 	"github.com/docker/docker/pkg/sysinfo"
 	"github.com/docker/docker/pkg/system"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/runconfig"
 	"github.com/docker/engine-api/types"
 	pblkiodev "github.com/docker/engine-api/types/blkiodev"
@@ -383,7 +384,7 @@ func (daemon *Daemon) conditionalUnmountOnCleanup(container *container.Container
 	return nil
 }
 
-func restoreCustomImage(is image.Store, ls layer.Store, rs reference.Store) error {
+func restoreCustomImage(is image.Store, ls layer.Store, rs refstore.Store) error {
 	type graphDriverStore interface {
 		GraphDriver() graphdriver.Driver
 	}
@@ -436,7 +437,7 @@ func restoreCustomImage(is image.Store, ls layer.Store, rs reference.Store) erro
 			OSFeatures: info.OSFeatures,
 		})
 
-		named, err := reference.ParseNamed(name)
+		named, err := reference.NormalizedName(name)
 		if err != nil {
 			return err
 		}

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
-	"github.com/docker/docker/reference"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/registry"
 	"github.com/docker/docker/utils"
 	"github.com/docker/engine-api/types"
@@ -58,7 +58,7 @@ func testTokenPassThru(t *testing.T, ts *httptest.Server) {
 		TLSConfig:    nil,
 		//VersionHeader: "verheader",
 	}
-	n, _ := reference.ParseNamed("testremotename")
+	n, _ := reference.NormalizedName("testremotename")
 	repoInfo := &registry.RepositoryInfo{
 		Named: n,
 		Index: &registrytypes.IndexInfo{

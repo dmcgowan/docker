@@ -6,9 +6,9 @@ import (
 
 	"golang.org/x/net/context"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/client"
 	"github.com/docker/docker/cli"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/registry"
 	"github.com/spf13/cobra"
 )
@@ -41,7 +41,7 @@ func NewPullCommand(dockerCli *client.DockerCli) *cobra.Command {
 }
 
 func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
-	distributionRef, err := reference.ParseNamed(opts.remote)
+	distributionRef, err := reference.NormalizedName(opts.remote)
 	if err != nil {
 		return err
 	}
@@ -50,8 +50,9 @@ func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
 	}
 
 	if !opts.all && reference.IsNameOnly(distributionRef) {
-		distributionRef = reference.WithDefaultTag(distributionRef)
-		fmt.Fprintf(dockerCli.Out(), "Using default tag: %s\n", reference.DefaultTag)
+		nt := reference.EnsureTagged(distributionRef)
+		fmt.Fprintf(dockerCli.Out(), "Using default tag: %s\n", nt.Tag())
+		distributionRef = nt
 	}
 
 	var tag string

@@ -340,7 +340,7 @@ func handlerGetDeleteTags(w http.ResponseWriter, r *http.Request) {
 	if !requiresAuth(w, r) {
 		return
 	}
-	repositoryName, err := reference.NormalizedName(mux.Vars(r)["repository"])
+	repositoryName, err := reference.WithName(mux.Vars(r)["repository"])
 	if err != nil {
 		apiError(w, "Could not parse repository", 400)
 		return

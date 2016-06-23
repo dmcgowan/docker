@@ -82,7 +82,7 @@ func (p *v2Pusher) pushV2Repository(ctx context.Context) (err error) {
 	if namedTagged, isNamedTagged := p.ref.(reference.NamedTagged); isNamedTagged {
 		imageID, err := p.config.ReferenceStore.Get(p.ref)
 		if err != nil {
-			return fmt.Errorf("tag does not exist: %s", p.ref.String())
+			return fmt.Errorf("tag does not exist: %s", reference.FamiliarName(p.ref).String())
 		}
 
 		return p.pushV2Tag(ctx, namedTagged, imageID)
@@ -111,11 +111,11 @@ func (p *v2Pusher) pushV2Repository(ctx context.Context) (err error) {
 }
 
 func (p *v2Pusher) pushV2Tag(ctx context.Context, ref reference.NamedTagged, imageID image.ID) error {
-	logrus.Debugf("Pushing repository: %s", ref.String())
+	logrus.Debugf("Pushing repository: %s", reference.FamiliarName(ref).String())
 
 	img, err := p.config.ImageStore.Get(imageID)
 	if err != nil {
-		return fmt.Errorf("could not find image from tag %s: %v", ref.String(), err)
+		return fmt.Errorf("could not find image from tag %s: %v", reference.FamiliarName(ref).String(), err)
 	}
 
 	var l layer.Layer

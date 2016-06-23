@@ -168,7 +168,7 @@ func sanitizeRepoAndTags(names []string) ([]reference.Named, error) {
 			ref = reference.EnsureTagged(ref)
 		}
 
-		nameWithTag := ref.String()
+		nameWithTag := reference.FamiliarName(ref).String()
 
 		if _, exists := uniqNames[nameWithTag]; !exists {
 			uniqNames[nameWithTag] = struct{}{}

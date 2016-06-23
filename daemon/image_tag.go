@@ -32,6 +32,6 @@ func (daemon *Daemon) TagImageWithReference(imageID image.ID, newTag reference.N
 		return err
 	}
 
-	daemon.LogImageEvent(imageID.String(), newTag.String(), "tag")
+	daemon.LogImageEvent(imageID.String(), reference.FamiliarName(newTag).String(), "tag")
 	return nil
 }

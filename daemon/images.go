@@ -138,7 +138,7 @@ func (daemon *Daemon) Images(filterArgs, filter string, all bool) ([]*types.Imag
 		for _, ref := range daemon.referenceStore.References(id) {
 			if filter != "" { // filter by tag/repo name
 				if filterTagged { // filter by tag, require full ref match
-					if ref.String() != filter {
+					if reference.FamiliarName(ref).String() != filter {
 						continue
 					}
 				} else if matched, err := path.Match(filter, reference.FamiliarName(ref).Name()); !matched || err != nil { // name only match, FIXME: docs say exact
@@ -146,10 +146,10 @@ func (daemon *Daemon) Images(filterArgs, filter string, all bool) ([]*types.Imag
 				}
 			}
 			if _, ok := ref.(reference.Canonical); ok {
-				newImage.RepoDigests = append(newImage.RepoDigests, ref.String())
+				newImage.RepoDigests = append(newImage.RepoDigests, reference.FamiliarName(ref).String())
 			}
 			if _, ok := ref.(reference.NamedTagged); ok {
-				newImage.RepoTags = append(newImage.RepoTags, ref.String())
+				newImage.RepoTags = append(newImage.RepoTags, reference.FamiliarName(ref).String())
 			}
 		}
 		if newImage.RepoDigests == nil && newImage.RepoTags == nil {

@@ -174,7 +174,7 @@ func createContainer(ctx context.Context, dockerCli *client.DockerCli, config *c
 		if err != nil {
 			return nil, err
 		}
-		config.Image = trustedRef.String()
+		config.Image = reference.FamiliarName(trustedRef).String()
 	}
 
 	//create the container
@@ -183,7 +183,7 @@ func createContainer(ctx context.Context, dockerCli *client.DockerCli, config *c
 	//if image not found try to pull it
 	if err != nil {
 		if apiclient.IsErrImageNotFound(err) && ref != nil {
-			fmt.Fprintf(stderr, "Unable to find image '%s' locally\n", ref.String())
+			fmt.Fprintf(stderr, "Unable to find image '%s' locally\n", config.Image)
 
 			// we don't want to write to stdout anything apart from container.ID
 			if err = pullImage(ctx, dockerCli, config.Image, stderr); err != nil {

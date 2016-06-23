@@ -667,7 +667,7 @@ func TestMirrorEndpointLookup(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	pushAPIEndpoints, err := s.LookupPushEndpoints(imageName.Hostname())
+	pushAPIEndpoints, err := s.LookupPushEndpoints(reference.Domain(imageName))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -675,7 +675,7 @@ func TestMirrorEndpointLookup(t *testing.T) {
 		t.Fatal("Push endpoint should not contain mirror")
 	}
 
-	pullAPIEndpoints, err := s.LookupPullEndpoints(imageName.Hostname())
+	pullAPIEndpoints, err := s.LookupPullEndpoints(reference.Domain(imageName))
 	if err != nil {
 		t.Fatal(err)
 	}

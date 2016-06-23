@@ -337,7 +337,7 @@ func (t *mockTagAdder) AddTag(ref reference.Named, id image.ID, force bool) erro
 	if t.refs == nil {
 		t.refs = make(map[string]string)
 	}
-	t.refs[ref.String()] = id.String()
+	t.refs[reference.FamiliarName(ref).String()] = id.String()
 	return nil
 }
 func (t *mockTagAdder) AddDigest(ref reference.Canonical, id image.ID, force bool) error {

@@ -338,7 +338,7 @@ func migrateRefs(root, driverName string, rs refAdder, mappings map[string]image
 						continue
 					}
 					if err := rs.AddDigest(canonical, strongID, false); err != nil {
-						logrus.Errorf("can't migrate digest %q for %q, err: %q", ref.String(), strongID, err)
+						logrus.Errorf("can't migrate digest %q for %q, err: %q", reference.FamiliarName(ref).String(), strongID, err)
 					}
 				} else {
 					tagRef, err := reference.WithTag(ref, tag)
@@ -347,7 +347,7 @@ func migrateRefs(root, driverName string, rs refAdder, mappings map[string]image
 						continue
 					}
 					if err := rs.AddTag(tagRef, strongID, false); err != nil {
-						logrus.Errorf("can't migrate tag %q for %q, err: %q", ref.String(), strongID, err)
+						logrus.Errorf("can't migrate tag %q for %q, err: %q", reference.FamiliarName(ref).String(), strongID, err)
 					}
 				}
 				logrus.Infof("migrated tag %s:%s to point to %s", name, tag, strongID)

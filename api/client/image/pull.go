@@ -81,6 +81,6 @@ func runPull(dockerCli *client.DockerCli, opts pullOptions) error {
 		return dockerCli.TrustedPull(ctx, repoInfo, registryRef, authConfig, requestPrivilege)
 	}
 
-	return dockerCli.ImagePullPrivileged(ctx, authConfig, distributionRef.String(), requestPrivilege, opts.all)
+	return dockerCli.ImagePullPrivileged(ctx, authConfig, reference.FamiliarName(distributionRef).String(), requestPrivilege, opts.all)
 
 }

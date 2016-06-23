@@ -152,7 +152,7 @@ func (s *saveSession) save(outStream io.Writer) error {
 				reposLegacy[ref.Name()] = make(map[string]string)
 			}
 			reposLegacy[ref.Name()][ref.Tag()] = imageDescr.layers[len(imageDescr.layers)-1]
-			repoTags = append(repoTags, ref.String())
+			repoTags = append(repoTags, reference.FamiliarName(ref).String())
 		}
 
 		for _, l := range imageDescr.layers {

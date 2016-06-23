@@ -127,7 +127,7 @@ func (p *v1Puller) pullRepository(ctx context.Context, ref reference.Named) erro
 		}
 	}
 
-	writeStatus(ref.String(), p.config.ProgressOutput, layersDownloaded)
+	writeStatus(reference.FamiliarName(ref).String(), p.config.ProgressOutput, layersDownloaded)
 	return nil
 }
 

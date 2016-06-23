@@ -118,7 +118,7 @@ func (store *store) addReference(ref reference.Named, id image.ID, force bool) e
 		store.Repositories[familiarName] = repository
 	}
 
-	refStr := ref.String()
+	refStr := reference.FamiliarName(ref).String()
 	oldID, exists := repository[refStr]
 
 	if exists {
@@ -128,7 +128,7 @@ func (store *store) addReference(ref reference.Named, id image.ID, force bool) e
 		}
 
 		if !force {
-			return fmt.Errorf("Conflict: Tag %s is already set to image %s, if you want to replace it, please use -f option", ref.String(), oldID.String())
+			return fmt.Errorf("Conflict: Tag %s is already set to image %s, if you want to replace it, please use -f option", reference.FamiliarName(ref).String(), oldID.String())
 		}
 
 		if store.referencesByIDCache[oldID] != nil {
@@ -165,7 +165,7 @@ func (store *store) Delete(ref reference.Named) (bool, error) {
 		return false, ErrDoesNotExist
 	}
 
-	refStr := ref.String()
+	refStr := reference.FamiliarName(ref).String()
 	if id, exists := repository[refStr]; exists {
 		delete(repository, refStr)
 		if len(repository) == 0 {
@@ -192,12 +192,13 @@ func (store *store) Get(ref reference.Named) (image.ID, error) {
 	store.mu.RLock()
 	defer store.mu.RUnlock()
 
-	repository, exists := store.Repositories[reference.FamiliarName(ref).Name()]
+	ref = reference.FamiliarName(ref)
+	repository, exists := store.Repositories[ref.Name()]
 	if !exists || repository == nil {
 		return "", ErrDoesNotExist
 	}
 
-	id, exists := repository[ref.String()]
+	id, exists := repository[reference.FamiliarName(ref).String()]
 	if !exists {
 		return "", ErrDoesNotExist
 	}

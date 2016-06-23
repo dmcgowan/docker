@@ -169,7 +169,7 @@ func Push(ctx context.Context, ref reference.Named, imagePushConfig *ImagePushCo
 			return err
 		}
 
-		imagePushConfig.ImageEventLogger(ref.String(), repoInfo.FamiliarName(), "push")
+		imagePushConfig.ImageEventLogger(reference.FamiliarName(ref).String(), repoInfo.FamiliarName(), "push")
 		return nil
 	}
 

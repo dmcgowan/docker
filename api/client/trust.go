@@ -280,9 +280,9 @@ func (cli *DockerCli) TrustedReference(ctx context.Context, ref reference.NamedT
 
 // TagTrusted tags a trusted ref
 func (cli *DockerCli) TagTrusted(ctx context.Context, trustedRef reference.Canonical, ref reference.NamedTagged) error {
-	fmt.Fprintf(cli.out, "Tagging %s as %s\n", trustedRef.String(), ref.String())
+	fmt.Fprintf(cli.out, "Tagging %s as %s\n", reference.FamiliarName(trustedRef).String(), reference.FamiliarName(ref).String())
 
-	return cli.client.ImageTag(ctx, trustedRef.String(), ref.String())
+	return cli.client.ImageTag(ctx, reference.FamiliarName(trustedRef).String(), reference.FamiliarName(ref).String())
 }
 
 func notaryError(repoName string, err error) error {
@@ -378,7 +378,7 @@ func (cli *DockerCli) TrustedPull(ctx context.Context, repoInfo *registry.Reposi
 		if err != nil {
 			return err
 		}
-		if err := cli.ImagePullPrivileged(ctx, authConfig, ref.String(), requestPrivilege, false); err != nil {
+		if err := cli.ImagePullPrivileged(ctx, authConfig, reference.FamiliarName(ref).String(), requestPrivilege, false); err != nil {
 			return err
 		}
 
@@ -402,7 +402,7 @@ func (cli *DockerCli) TrustedPull(ctx context.Context, repoInfo *registry.Reposi
 
 // TrustedPush handles content trust pushing of an image
 func (cli *DockerCli) TrustedPush(ctx context.Context, repoInfo *registry.RepositoryInfo, ref reference.Named, authConfig types.AuthConfig, requestPrivilege types.RequestPrivilegeFunc) error {
-	responseBody, err := cli.ImagePushPrivileged(ctx, authConfig, ref.String(), requestPrivilege)
+	responseBody, err := cli.ImagePushPrivileged(ctx, authConfig, reference.FamiliarName(ref).String(), requestPrivilege)
 	if err != nil {
 		return err
 	}

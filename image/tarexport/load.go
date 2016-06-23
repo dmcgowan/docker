@@ -200,7 +200,7 @@ func (l *tarexporter) loadLayer(filename string, rootFS image.RootFS, id string,
 
 func (l *tarexporter) setLoadedTag(ref reference.NamedTagged, imgID image.ID, outStream io.Writer) error {
 	if prevID, err := l.rs.Get(ref); err == nil && prevID != imgID {
-		fmt.Fprintf(outStream, "The image %s already exists, renaming the old one with ID %s to empty string\n", ref.String(), string(prevID)) // todo: this message is wrong in case of multiple tags
+		fmt.Fprintf(outStream, "The image %s already exists, renaming the old one with ID %s to empty string\n", reference.FamiliarName(ref).String(), string(prevID)) // todo: this message is wrong in case of multiple tags
 	}
 
 	if err := l.rs.AddTag(ref, imgID, true); err != nil {

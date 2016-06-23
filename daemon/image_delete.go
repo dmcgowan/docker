@@ -97,7 +97,7 @@ func (daemon *Daemon) ImageDelete(imageRef string, force, prune bool) ([]types.I
 			return nil, err
 		}
 
-		untaggedRecord := types.ImageDelete{Untagged: parsedRef.String()}
+		untaggedRecord := types.ImageDelete{Untagged: reference.FamiliarName(parsedRef).String()}
 
 		daemon.LogImageEvent(imgID.String(), imgID.String(), "untag")
 		records = append(records, untaggedRecord)
@@ -121,7 +121,7 @@ func (daemon *Daemon) ImageDelete(imageRef string, force, prune bool) ([]types.I
 						return records, err
 					}
 
-					untaggedRecord := types.ImageDelete{Untagged: repoRef.String()}
+					untaggedRecord := types.ImageDelete{Untagged: reference.FamiliarName(repoRef).String()}
 					records = append(records, untaggedRecord)
 				}
 				repoRefs = []reference.Named{}
@@ -153,7 +153,7 @@ func (daemon *Daemon) ImageDelete(imageRef string, force, prune bool) ([]types.I
 				return nil, err
 			}
 
-			untaggedRecord := types.ImageDelete{Untagged: parsedRef.String()}
+			untaggedRecord := types.ImageDelete{Untagged: reference.FamiliarName(parsedRef).String()}
 
 			daemon.LogImageEvent(imgID.String(), imgID.String(), "untag")
 			records = append(records, untaggedRecord)
@@ -216,7 +216,7 @@ func (daemon *Daemon) removeAllReferencesToImageID(imgID image.ID, records *[]ty
 			return err
 		}
 
-		untaggedRecord := types.ImageDelete{Untagged: parsedRef.String()}
+		untaggedRecord := types.ImageDelete{Untagged: reference.FamiliarName(parsedRef).String()}
 
 		daemon.LogImageEvent(imgID.String(), imgID.String(), "untag")
 		*records = append(*records, untaggedRecord)

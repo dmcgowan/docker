@@ -23,9 +23,9 @@ func (daemon *Daemon) LookupImage(name string) (*types.ImageInspect, error) {
 	for _, ref := range refs {
 		switch ref.(type) {
 		case reference.NamedTagged:
-			repoTags = append(repoTags, ref.String())
+			repoTags = append(repoTags, reference.FamiliarName(ref).String())
 		case reference.Canonical:
-			repoDigests = append(repoDigests, ref.String())
+			repoDigests = append(repoDigests, reference.FamiliarName(ref).String())
 		}
 	}
 

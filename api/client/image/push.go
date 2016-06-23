@@ -51,7 +51,7 @@ func runPush(dockerCli *client.DockerCli, remote string) error {
 		return dockerCli.TrustedPush(ctx, repoInfo, ref, authConfig, requestPrivilege)
 	}
 
-	responseBody, err := dockerCli.ImagePushPrivileged(ctx, authConfig, ref.String(), requestPrivilege)
+	responseBody, err := dockerCli.ImagePushPrivileged(ctx, authConfig, reference.FamiliarName(ref).String(), requestPrivilege)
 	if err != nil {
 		return err
 	}

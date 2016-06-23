@@ -122,7 +122,7 @@ func (p *v2Puller) pullV2Repository(ctx context.Context, ref reference.Named) (e
 		}
 	}
 
-	writeStatus(ref.String(), p.config.ProgressOutput, layersDownloaded)
+	writeStatus(reference.FamiliarName(ref).String(), p.config.ProgressOutput, layersDownloaded)
 
 	return nil
 }
@@ -350,7 +350,7 @@ func (p *v2Puller) pullV2Tag(ctx context.Context, ref reference.Named) (tagUpdat
 		}
 		tagOrDigest = digested.Digest().String()
 	} else {
-		return false, fmt.Errorf("internal error: reference has neither a tag nor a digest: %s", ref.String())
+		return false, fmt.Errorf("internal error: reference has neither a tag nor a digest: %s", reference.FamiliarName(ref).String())
 	}
 
 	if manifest == nil {
@@ -361,7 +361,7 @@ func (p *v2Puller) pullV2Tag(ctx context.Context, ref reference.Named) (tagUpdat
 	// the other side speaks the v2 protocol.
 	p.confirmedV2 = true
 
-	logrus.Debugf("Pulling ref from V2 registry: %s", ref.String())
+	logrus.Debugf("Pulling ref from V2 registry: %s", reference.FamiliarName(ref).String())
 	progress.Message(p.config.ProgressOutput, tagOrDigest, "Pulling from "+p.repo.Named().Name())
 
 	var (
@@ -778,13 +778,13 @@ func verifySchema1Manifest(signedManifest *schema1.SignedManifest, ref reference
 	m = &signedManifest.Manifest
 
 	if m.SchemaVersion != 1 {
-		return nil, fmt.Errorf("unsupported schema version %d for %q", m.SchemaVersion, ref.String())
+		return nil, fmt.Errorf("unsupported schema version %d for %q", m.SchemaVersion, reference.FamiliarName(ref).String())
 	}
 	if len(m.FSLayers) != len(m.History) {
-		return nil, fmt.Errorf("length of history not equal to number of layers for %q", ref.String())
+		return nil, fmt.Errorf("length of history not equal to number of layers for %q", reference.FamiliarName(ref).String())
 	}
 	if len(m.FSLayers) == 0 {
-		return nil, fmt.Errorf("no FSLayers in manifest for %q", ref.String())
+		return nil, fmt.Errorf("no FSLayers in manifest for %q", reference.FamiliarName(ref).String())
 	}
 	return m, nil
 }

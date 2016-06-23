@@ -171,12 +171,12 @@ func Pull(ctx context.Context, ref reference.Named, imagePullConfig *ImagePullCo
 			return err
 		}
 
-		imagePullConfig.ImageEventLogger(ref.String(), repoInfo.FamiliarName(), "pull")
+		imagePullConfig.ImageEventLogger(reference.FamiliarName(ref).String(), repoInfo.FamiliarName(), "pull")
 		return nil
 	}
 
 	if lastErr == nil {
-		lastErr = fmt.Errorf("no endpoints found for %s", ref.String())
+		lastErr = fmt.Errorf("no endpoints found for %s", reference.FamiliarName(ref).String())
 	}
 
 	return lastErr

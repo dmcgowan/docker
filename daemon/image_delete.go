@@ -63,7 +63,7 @@ const (
 func (daemon *Daemon) ImageDelete(imageRef string, force, prune bool) ([]types.ImageDelete, error) {
 	records := []types.ImageDelete{}
 
-	imgID, err := daemon.GetImageID(imageRef)
+	imgID, ref, err := daemon.resolveImageReference(imageRef)
 	if err != nil {
 		return nil, daemon.imageNotExistToErrcode(err)
 	}
@@ -71,7 +71,14 @@ func (daemon *Daemon) ImageDelete(imageRef string, force, prune bool) ([]types.I
 	repoRefs := daemon.referenceStore.References(imgID)
 
 	var removedRepositoryRef bool
-	if !isImageIDPrefix(imgID.String(), imageRef) {
+	var digestRef bool
+	if ref != nil {
+		if _, ok := ref.(reference.Canonical); ok {
+			digestRef = true
+		}
+	}
+
+	if ref != nil && !digestRef && !isImageIDPrefix(imgID.String(), imageRef) {
 		// A repository reference was given and should be removed
 		// first. We can only remove this reference if either force is
 		// true, there are multiple repository references to this
@@ -87,52 +94,42 @@ func (daemon *Daemon) ImageDelete(imageRef string, force, prune bool) ([]types.I
 			}
 		}
 
-		parsedRef, err := reference.ParseNamed(imageRef)
+		removedRef, err := daemon.removeImageRef(ref)
 		if err != nil {
 			return nil, err
 		}
 
-		parsedRef, err = daemon.removeImageRef(parsedRef)
-		if err != nil {
-			return nil, err
-		}
-
-		untaggedRecord := types.ImageDelete{Untagged: parsedRef.String()}
+		untaggedRecord := types.ImageDelete{Untagged: ref.String()}
 
 		daemon.LogImageEvent(imgID.String(), imgID.String(), "untag")
 		records = append(records, untaggedRecord)
 
 		repoRefs = daemon.referenceStore.References(imgID)
 
-		// If a tag reference was removed and the only remaining
-		// references to the same repository are digest references,
-		// then clean up those digest references.
-		if _, isCanonical := parsedRef.(reference.Canonical); !isCanonical {
-			foundRepoTagRef := false
+		foundRepoTagRef := false
+		for _, repoRef := range repoRefs {
+			if _, repoRefIsCanonical := repoRef.(reference.Canonical); !repoRefIsCanonical && removedRef.Name() == repoRef.Name() {
+				foundRepoTagRef = true
+				break
+			}
+		}
+		if !foundRepoTagRef {
+			// Remove canonical references from same repository
+			remainingRefs := []reference.Named{}
 			for _, repoRef := range repoRefs {
-				if _, repoRefIsCanonical := repoRef.(reference.Canonical); !repoRefIsCanonical && parsedRef.Name() == repoRef.Name() {
-					foundRepoTagRef = true
-					break
-				}
-			}
-			if !foundRepoTagRef {
-				// Remove canonical references from same repository
-				remainingRefs := []reference.Named{}
-				for _, repoRef := range repoRefs {
-					if _, repoRefIsCanonical := repoRef.(reference.Canonical); repoRefIsCanonical && parsedRef.Name() == repoRef.Name() {
-						if _, err := daemon.removeImageRef(repoRef); err != nil {
-							return records, err
-						}
-
-						untaggedRecord := types.ImageDelete{Untagged: repoRef.String()}
-						records = append(records, untaggedRecord)
-					} else {
-						remainingRefs = append(remainingRefs, repoRef)
-
+				if _, repoRefIsCanonical := repoRef.(reference.Canonical); repoRefIsCanonical && removedRef.Name() == repoRef.Name() {
+					if _, err := daemon.removeImageRef(repoRef); err != nil {
+						return records, err
 					}
+
+					untaggedRecord := types.ImageDelete{Untagged: repoRef.String()}
+					records = append(records, untaggedRecord)
+				} else {
+					remainingRefs = append(remainingRefs, repoRef)
+
 				}
-				repoRefs = remainingRefs
 			}
+			repoRefs = remainingRefs
 		}
 
 		// If it has remaining references then the untag finished the remove

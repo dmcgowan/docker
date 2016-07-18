@@ -22,25 +22,30 @@ func (e ErrImageDoesNotExist) Error() string {
 // GetImageID returns an image ID corresponding to the image referred to by
 // refOrID.
 func (daemon *Daemon) GetImageID(refOrID string) (image.ID, error) {
+	id, _, err := daemon.resolveImageReference(refOrID)
+	return id, err
+}
+
+func (daemon *Daemon) resolveImageReference(refOrID string) (image.ID, reference.Named, error) {
 	id, ref, err := reference.ParseIDOrReference(refOrID)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if id != "" {
 		if _, err := daemon.imageStore.Get(image.ID(id)); err != nil {
-			return "", ErrImageDoesNotExist{refOrID}
+			return "", nil, ErrImageDoesNotExist{refOrID}
 		}
-		return image.ID(id), nil
+		return image.ID(id), ref, nil
 	}
 
 	if id, err := daemon.referenceStore.Get(ref); err == nil {
-		return id, nil
+		return id, ref, nil
 	}
 	if tagged, ok := ref.(reference.NamedTagged); ok {
 		if id, err := daemon.imageStore.Search(tagged.Tag()); err == nil {
 			for _, namedRef := range daemon.referenceStore.References(id) {
 				if namedRef.Name() == ref.Name() {
-					return id, nil
+					return id, ref, nil
 				}
 			}
 		}
@@ -48,10 +53,10 @@ func (daemon *Daemon) GetImageID(refOrID string) (image.ID, error) {
 
 	// Search based on ID
 	if id, err := daemon.imageStore.Search(refOrID); err == nil {
-		return id, nil
+		return id, ref, nil
 	}
 
-	return "", ErrImageDoesNotExist{refOrID}
+	return "", nil, ErrImageDoesNotExist{refOrID}
 }
 
 // GetImage returns an image corresponding to the image referred to by refOrID.

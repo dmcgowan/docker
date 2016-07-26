@@ -15,6 +15,7 @@ import (
 	"syscall"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/vbatts/tar-split/tar/storage"
 
 	"github.com/docker/docker/daemon/graphdriver"
 	"github.com/docker/docker/pkg/archive"
@@ -492,6 +493,20 @@ func (d *Driver) Diff(id, parent string) (archive.Archive, error) {
 		GIDMaps:        d.gidMaps,
 		WhiteoutFormat: archive.OverlayWhiteoutFormat,
 	})
+}
+
+type fileGetNilCloser struct {
+	storage.FileGetter
+}
+
+func (f fileGetNilCloser) Close() error {
+	return nil
+}
+
+// DiffGetter returns a FileGetCloser that can read files from the directory that
+// contains files for the layer differences. Used for direct access for tar-split.
+func (d *Driver) DiffGetter(id string) (graphdriver.FileGetCloser, error) {
+	return fileGetNilCloser{storage.NewPathFileGetter(d.getDiffPath(id))}, nil
 }
 
 // Changes produces a list of changes between the specified layer

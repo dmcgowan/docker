@@ -44,98 +44,96 @@ func NewInputTarStream(r io.Reader, p storage.Packer, fp storage.FilePutter) (io
 	}
 
 	go func() {
-		tr := tar.NewReader(outputRdr)
-		tr.RawAccounting = true
-		for {
-			hdr, err := tr.Next()
-			if err != nil {
-				if err != io.EOF {
-					pW.CloseWithError(err)
-					return
-				}
-				// even when an EOF is reached, there is often 1024 null bytes on
-				// the end of an archive. Collect them too.
-				if b := tr.RawBytes(); len(b) > 0 {
-					_, err := p.AddEntry(storage.Entry{
-						Type:    storage.SegmentType,
-						Payload: b,
-					})
-					if err != nil {
-						pW.CloseWithError(err)
-						return
-					}
-				}
-				break // not return. We need the end of the reader.
-			}
-			if hdr == nil {
-				break // not return. We need the end of the reader.
-			}
+		pW.CloseWithError(DisassembleTarStream(outputRdr, p, fp))
+	}()
 
+	return pR, nil
+}
+
+// DisassembleTarStream disassembles the tar stream into the provided packer and
+// file putter.
+func DisassembleTarStream(r io.Reader, p storage.Packer, fp storage.FilePutter) error {
+	tr := tar.NewReader(r)
+	tr.RawAccounting = true
+	for {
+		hdr, err := tr.Next()
+		if err != nil {
+			if err != io.EOF {
+				return err
+			}
+			// even when an EOF is reached, there is often 1024 null bytes on
+			// the end of an archive. Collect them too.
 			if b := tr.RawBytes(); len(b) > 0 {
 				_, err := p.AddEntry(storage.Entry{
 					Type:    storage.SegmentType,
 					Payload: b,
 				})
 				if err != nil {
-					pW.CloseWithError(err)
-					return
+					return err
 				}
 			}
+			break // not return. We need the end of the reader.
+		}
+		if hdr == nil {
+			break // not return. We need the end of the reader.
+		}
 
-			var csum []byte
-			if hdr.Size > 0 {
-				var err error
-				_, csum, err = fp.Put(hdr.Name, tr)
-				if err != nil {
-					pW.CloseWithError(err)
-					return
-				}
-			}
-
-			entry := storage.Entry{
-				Type:    storage.FileType,
-				Size:    hdr.Size,
-				Payload: csum,
-			}
-			// For proper marshalling of non-utf8 characters
-			entry.SetName(hdr.Name)
-
-			// File entries added, regardless of size
-			_, err = p.AddEntry(entry)
+		if b := tr.RawBytes(); len(b) > 0 {
+			_, err := p.AddEntry(storage.Entry{
+				Type:    storage.SegmentType,
+				Payload: b,
+			})
 			if err != nil {
-				pW.CloseWithError(err)
-				return
-			}
-
-			if b := tr.RawBytes(); len(b) > 0 {
-				_, err = p.AddEntry(storage.Entry{
-					Type:    storage.SegmentType,
-					Payload: b,
-				})
-				if err != nil {
-					pW.CloseWithError(err)
-					return
-				}
+				return err
 			}
 		}
 
-		// it is allowable, and not uncommon that there is further padding on the
-		// end of an archive, apart from the expected 1024 null bytes.
-		remainder, err := ioutil.ReadAll(outputRdr)
-		if err != nil && err != io.EOF {
-			pW.CloseWithError(err)
-			return
+		var csum []byte
+		name := hdr.Name
+		if hdr.Size > 0 {
+			var err error
+			name, _, csum, err = fp.Put(hdr.Name, tr)
+			if err != nil {
+				return err
+			}
 		}
-		_, err = p.AddEntry(storage.Entry{
-			Type:    storage.SegmentType,
-			Payload: remainder,
-		})
+
+		entry := storage.Entry{
+			Type:    storage.FileType,
+			Size:    hdr.Size,
+			Payload: csum,
+			Header:  hdr,
+		}
+		// For proper marshalling of non-utf8 characters
+		entry.SetName(name)
+
+		// File entries added, regardless of size
+		_, err = p.AddEntry(entry)
 		if err != nil {
-			pW.CloseWithError(err)
-			return
+			return err
 		}
-		pW.Close()
-	}()
 
-	return pR, nil
+		if b := tr.RawBytes(); len(b) > 0 {
+			_, err = p.AddEntry(storage.Entry{
+				Type:    storage.SegmentType,
+				Payload: b,
+			})
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	// it is allowable, and not uncommon that there is further padding on the
+	// end of an archive, apart from the expected 1024 null bytes.
+	remainder, err := ioutil.ReadAll(r)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	_, err = p.AddEntry(storage.Entry{
+		Type:    storage.SegmentType,
+		Payload: remainder,
+	})
+
+	return err
 }

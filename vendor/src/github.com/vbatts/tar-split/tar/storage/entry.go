@@ -1,6 +1,11 @@
 package storage
 
-import "unicode/utf8"
+import (
+	"archive/tar"
+	"unicode/utf8"
+
+	vtar "github.com/vbatts/tar-split/archive/tar"
+)
 
 // Entries is for sorting by Position
 type Entries []Entry
@@ -33,12 +38,13 @@ const (
 // From http://www.backplane.com/matt/crc64.html, CRC32 has almost 40,000
 // collisions in a sample of 18.2 million, CRC64 had none.
 type Entry struct {
-	Type     Type   `json:"type"`
-	Name     string `json:"name,omitempty"`
-	NameRaw  []byte `json:"name_raw,omitempty"`
-	Size     int64  `json:"size,omitempty"`
-	Payload  []byte `json:"payload"` // SegmentType stores payload here; FileType stores crc64 checksum here;
-	Position int    `json:"position"`
+	Type     Type         `json:"type"`
+	Name     string       `json:"name,omitempty"`
+	NameRaw  []byte       `json:"name_raw,omitempty"`
+	Size     int64        `json:"size,omitempty"`
+	Payload  []byte       `json:"payload"` // SegmentType stores payload here; FileType stores crc64 checksum here;
+	Position int          `json:"position"`
+	Header   *vtar.Header `json:"-"`
 }
 
 // SetName will check name for valid UTF-8 string, and set the appropriate
@@ -75,4 +81,29 @@ func (e *Entry) GetNameBytes() []byte {
 		return e.NameRaw
 	}
 	return []byte(e.Name)
+}
+
+// GetTarHeader returns a copy of the tar header if the
+// entry contains one.
+func (e *Entry) GetTarHeader() *tar.Header {
+	if e.Header == nil {
+		return nil
+	}
+	return &tar.Header{
+		Name:       e.Header.Name,
+		Mode:       e.Header.Mode,
+		Uid:        e.Header.Uid,
+		Gid:        e.Header.Gid,
+		Size:       e.Header.Size,
+		ModTime:    e.Header.ModTime,
+		Typeflag:   e.Header.Typeflag,
+		Linkname:   e.Header.Linkname,
+		Uname:      e.Header.Uname,
+		Gname:      e.Header.Gname,
+		Devmajor:   e.Header.Devmajor,
+		Devminor:   e.Header.Devminor,
+		AccessTime: e.Header.AccessTime,
+		ChangeTime: e.Header.ChangeTime,
+		Xattrs:     e.Header.Xattrs,
+	}
 }

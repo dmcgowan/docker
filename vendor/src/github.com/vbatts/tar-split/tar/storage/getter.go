@@ -18,11 +18,11 @@ type FileGetter interface {
 }
 
 // FilePutter is the interface for storing a stream of a file payload,
-// addressed by name/filename.
+// returns name/filename in which the content is addressed.
 type FilePutter interface {
 	// Put returns the size of the stream received, and the crc64 checksum for
 	// the provided stream
-	Put(filename string, input io.Reader) (size int64, checksum []byte, err error)
+	Put(filename string, input io.Reader) (name string, size int64, checksum []byte, err error)
 }
 
 // FileGetPutter is the interface that groups both Getting and Putting file
@@ -58,16 +58,16 @@ func (bfgp bufferFileGetPutter) Get(name string) (io.ReadCloser, error) {
 	return &readCloserWrapper{b}, nil
 }
 
-func (bfgp *bufferFileGetPutter) Put(name string, r io.Reader) (int64, []byte, error) {
+func (bfgp *bufferFileGetPutter) Put(name string, r io.Reader) (string, int64, []byte, error) {
 	crc := crc64.New(CRCTable)
 	buf := bytes.NewBuffer(nil)
 	cw := io.MultiWriter(crc, buf)
 	i, err := io.Copy(cw, r)
 	if err != nil {
-		return 0, nil, err
+		return "", 0, nil, err
 	}
 	bfgp.files[name] = buf.Bytes()
-	return i, crc.Sum(nil), nil
+	return name, i, crc.Sum(nil), nil
 }
 
 type readCloserWrapper struct {
@@ -94,10 +94,10 @@ func NewDiscardFilePutter() FilePutter {
 type bitBucketFilePutter struct {
 }
 
-func (bbfp *bitBucketFilePutter) Put(name string, r io.Reader) (int64, []byte, error) {
+func (bbfp *bitBucketFilePutter) Put(name string, r io.Reader) (string, int64, []byte, error) {
 	c := crc64.New(CRCTable)
 	i, err := io.Copy(c, r)
-	return i, c.Sum(nil), err
+	return name, i, c.Sum(nil), err
 }
 
 // CRCTable is the default table used for crc64 sum calculations

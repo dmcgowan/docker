@@ -93,6 +93,7 @@ clone git github.com/miekg/dns 75e6e86cc601825c5dbcd4e0c209eab180997cd7
 # get graph and distribution packages
 clone git github.com/docker/distribution 77b9d2997abcded79a5314970fe69a44c93c25fb
 clone git github.com/vbatts/tar-split v0.10.1
+clone git github.com/stevvooe/continuity 000c5a5032d11cf8989944c636a969d3fda68b04 https://github.com/dmcgowan/continuity.git
 
 # get go-zfs packages
 clone git github.com/mistifyio/go-zfs 22c9b32c84eb0d0c6f4043b6e90fc94073de92fa

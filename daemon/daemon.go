@@ -28,6 +28,7 @@ import (
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/events"
 	"github.com/docker/docker/daemon/exec"
+	"github.com/docker/docker/layer/continuitystore"
 	"github.com/docker/libnetwork/cluster"
 	// register graph drivers
 	_ "github.com/docker/docker/daemon/graphdriver/register"
@@ -554,17 +555,25 @@ func NewDaemon(config *Config, registryService registry.Service, containerdRemot
 
 	d.pluginStore = pluginstore.NewStore(config.Root)
 
-	d.layerStore, err = layer.NewStoreFromOptions(layer.StoreOptions{
-		StorePath:                 config.Root,
-		MetadataStorePathTemplate: filepath.Join(config.Root, "image", "%s", "layerdb"),
-		GraphDriver:               driverName,
-		GraphDriverOptions:        config.GraphOptions,
-		UIDMaps:                   uidMaps,
-		GIDMaps:                   gidMaps,
-		PluginGetter:              d.pluginStore,
-	})
-	if err != nil {
-		return nil, err
+	if driverName == "continuity" {
+		bs, err := continuitystore.NewBlobStore(filepath.Join(config.Root, "image", "continuity", "blobs"))
+		if err != nil {
+			return nil, err
+		}
+		d.layerStore = continuitystore.NewContinuityStore(bs)
+	} else {
+		d.layerStore, err = layer.NewStoreFromOptions(layer.StoreOptions{
+			StorePath:                 config.Root,
+			MetadataStorePathTemplate: filepath.Join(config.Root, "image", "%s", "layerdb"),
+			GraphDriver:               driverName,
+			GraphDriverOptions:        config.GraphOptions,
+			UIDMaps:                   uidMaps,
+			GIDMaps:                   gidMaps,
+			PluginGetter:              d.pluginStore,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	graphDriver := d.layerStore.DriverName()

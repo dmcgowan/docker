@@ -560,7 +560,7 @@ func NewDaemon(config *Config, registryService registry.Service, containerdRemot
 		if err != nil {
 			return nil, err
 		}
-		d.layerStore = continuitystore.NewContinuityStore(bs)
+		d.layerStore = continuitystore.NewContinuityStore(bs, filepath.Join(config.Root, "image", "continuity", "scratch"))
 	} else {
 		d.layerStore, err = layer.NewStoreFromOptions(layer.StoreOptions{
 			StorePath:                 config.Root,

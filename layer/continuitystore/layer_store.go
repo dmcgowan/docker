@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
@@ -38,17 +40,22 @@ type layerStore struct {
 
 	blobs *BlobStore
 
+	// TODO: replace with write capture driver
+	writeDir string
+
 	layerMap map[layer.ChainID]*roLayer
 	layerL   sync.Mutex
 
-	//mounts map[string]*mountedLayer
-	//mountL sync.Mutex
+	mounts map[string]*mountedLayer
+	mountL sync.Mutex
 }
 
-func NewContinuityStore(bs *BlobStore) layer.Store {
+func NewContinuityStore(bs *BlobStore, dir string) layer.Store {
 	return &layerStore{
 		blobs:    bs,
+		writeDir: dir,
 		layerMap: map[layer.ChainID]*roLayer{},
+		mounts:   map[string]*mountedLayer{},
 	}
 }
 
@@ -350,19 +357,143 @@ func (ls *layerStore) Release(l layer.Layer) ([]layer.Metadata, error) {
 }
 
 func (ls *layerStore) CreateRWLayer(name string, parent layer.ChainID, mountLabel string, initFunc layer.MountInit, storageOpt map[string]string) (layer.RWLayer, error) {
-	return nil, errors.New("not yet supported!")
+	ls.mountL.Lock()
+	defer ls.mountL.Unlock()
+	m, ok := ls.mounts[name]
+	if ok {
+		return nil, layer.ErrMountNameConflict
+	}
+
+	var err error
+	var lower string
+	var p *roLayer
+	if string(parent) != "" {
+		p = ls.get(parent)
+		if p == nil {
+			return nil, layer.ErrLayerDoesNotExist
+		}
+
+		lower = filepath.Join(ls.writeDir, "checkout", p.manifestID.Algorithm().String(), p.manifestID.Hex())
+		//TODO(dmcgowan): only checkout if does not exist
+
+		if err := os.MkdirAll(lower, 0755); err != nil {
+			return nil, errors.Wrap(err, "failed to make checkout directory")
+		}
+
+		options := continuity.ContextOptions{
+			Provider: ls.blobs,
+		}
+		context, err := continuity.NewContextWithOptions(lower, options)
+		if err != nil {
+			return nil, errors.Wrap(err, "unable to get continuity context")
+		}
+
+		parentManifest, err := ls.getManifest(p.manifestID)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to get parent manifest")
+		}
+
+		if err := continuity.ApplyManifest(context, parentManifest); err != nil {
+			return nil, errors.Wrap(err, "failed to checkout manifest")
+		}
+
+		// Release parent chain if error
+		defer func() {
+			if err != nil {
+				ls.layerL.Lock()
+				ls.releaseLayer(p)
+				ls.layerL.Unlock()
+			}
+		}()
+	}
+
+	wc, err := newWriteCapturer(filepath.Join(ls.writeDir, "capture", name), lower)
+	if err != nil {
+		return nil, errors.Wrap(err, "unable to create write capture layer")
+	}
+
+	m = &mountedLayer{
+		name:       name,
+		parent:     p,
+		capture:    wc,
+		references: map[layer.RWLayer]*referencedRWLayer{},
+	}
+
+	if initFunc != nil {
+		if err := wc.init(initFunc, mountLabel, storageOpt); err != nil {
+			return nil, errors.Wrap(err, "failed to initialize write capture layer")
+		}
+	}
+
+	//if err = ls.saveMount(m); err != nil {
+	//	return nil, err
+	//}
+
+	return m.getReference(), nil
 }
 
 func (ls *layerStore) GetRWLayer(id string) (layer.RWLayer, error) {
-	return nil, errors.New("not yet supported!")
+	ls.mountL.Lock()
+	defer ls.mountL.Unlock()
+	mount, ok := ls.mounts[id]
+	if !ok {
+		return nil, layer.ErrMountDoesNotExist
+	}
+
+	return mount.getReference(), nil
 }
 
 func (ls *layerStore) GetMountID(id string) (string, error) {
-	return "", errors.New("not yet supported!")
+	ls.mountL.Lock()
+	defer ls.mountL.Unlock()
+	mount, ok := ls.mounts[id]
+	if !ok {
+		return "", layer.ErrMountDoesNotExist
+	}
+	logrus.Debugf("GetMountID id: %s -> mountID: %s", id, mount.name)
+
+	return mount.name, nil
 }
 
 func (ls *layerStore) ReleaseRWLayer(l layer.RWLayer) ([]layer.Metadata, error) {
-	return nil, errors.New("not yet supported!")
+	ls.mountL.Lock()
+	defer ls.mountL.Unlock()
+	m, ok := ls.mounts[l.Name()]
+	if !ok {
+		return []layer.Metadata{}, nil
+	}
+
+	if err := m.deleteReference(l); err != nil {
+		return nil, err
+	}
+
+	if m.hasReferences() {
+		return []layer.Metadata{}, nil
+	}
+
+	// TODO: Call cleanup on write capturer
+	//if err := ls.driver.Remove(m.mountID); err != nil {
+	//	logrus.Errorf("Error removing mounted layer %s: %s", m.name, err)
+	//	m.retakeReference(l)
+	//	return nil, err
+	//}
+
+	///if err := ls.store.RemoveMount(m.name); err != nil {
+	///	logrus.Errorf("Error removing mount metadata: %s: %s", m.name, err)
+	///	m.retakeReference(l)
+	///	return nil, err
+	///}
+
+	delete(ls.mounts, m.Name())
+
+	ls.layerL.Lock()
+	defer ls.layerL.Unlock()
+	if m.parent != nil {
+		// TODO: checkin parent (may cause local cleanup)
+		return ls.releaseLayer(m.parent)
+	}
+
+	return []layer.Metadata{}, nil
 }
 
 func (ls *layerStore) Cleanup() error {
@@ -374,5 +505,5 @@ func (ls *layerStore) DriverStatus() [][2]string {
 }
 
 func (ls *layerStore) DriverName() string {
-	return "continuity+overlay"
+	return "continuity"
 }

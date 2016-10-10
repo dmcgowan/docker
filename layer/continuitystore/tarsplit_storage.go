@@ -27,15 +27,15 @@ func newManifestPacker(p storage.Packer) *manifestPacker {
 }
 
 func (mp *manifestPacker) AddEntry(e storage.Entry) (int, error) {
-	dgst, err := digest.ParseDigest(e.Name)
-	if err == nil {
-
-		hdr := e.GetTarHeader()
-		if hdr == nil {
-			return 0, errors.New("missing tar header")
+	hdr := e.GetTarHeader()
+	if hdr != nil {
+		dgsts := []digest.Digest{}
+		dgst, err := digest.ParseDigest(e.Name)
+		if err == nil {
+			dgsts = append(dgsts, dgst)
 		}
 
-		if err := mp.cctx.AddTarHeader(hdr, []digest.Digest{dgst}); err != nil {
+		if err := mp.cctx.AddTarHeader(hdr, dgsts); err != nil {
 			return 0, errors.Wrap(err, "unable to add tar header to continuity context")
 		}
 	}

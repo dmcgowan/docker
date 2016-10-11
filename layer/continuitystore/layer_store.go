@@ -380,22 +380,33 @@ func (ls *layerStore) CreateRWLayer(name string, parent layer.ChainID, mountLabe
 			return nil, errors.Wrap(err, "failed to make checkout directory")
 		}
 
-		options := continuity.ContextOptions{
-			Provider: ls.blobs,
-		}
-		context, err := continuity.NewContextWithOptions(lower, options)
-		if err != nil {
-			return nil, errors.Wrap(err, "unable to get continuity context")
-		}
-
 		parentManifest, err := ls.getManifest(p.manifestID)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to get parent manifest")
 		}
 
-		if err := continuity.ApplyManifest(context, parentManifest); err != nil {
-			return nil, errors.Wrap(err, "failed to checkout manifest")
+		fm, err := newFuseMounter(lower, parentManifest, ls.blobs)
+		if err != nil {
+			return nil, errors.Wrap(err, "unable to get fuse mounter")
 		}
+
+		if err := fm.Mount(); err != nil {
+			return nil, errors.Wrap(err, "unable to mount fuse")
+		}
+
+		/*
+			options := continuity.ContextOptions{
+				Provider: ls.blobs,
+			}
+			context, err := continuity.NewContextWithOptions(lower, options)
+			if err != nil {
+				return nil, errors.Wrap(err, "unable to get continuity context")
+			}
+
+			if err := continuity.ApplyManifest(context, parentManifest); err != nil {
+				return nil, errors.Wrap(err, "failed to checkout manifest")
+			}
+		*/
 
 		// Release parent chain if error
 		defer func() {

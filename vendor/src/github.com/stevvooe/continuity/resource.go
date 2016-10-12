@@ -29,6 +29,9 @@ type Resource interface {
 
 	UID() string
 	GID() string
+
+	ModTime() time.Time
+	AccessTime() time.Time
 }
 
 // ByPath provides the canonical sort order for a set of resources. Use with
@@ -59,9 +62,6 @@ type RegularFile interface {
 
 	Size() int64
 	Digests() []digest.Digest
-
-	ModTime() time.Time
-	AccessTime() time.Time
 }
 
 // Merge two or more Resources into new file. Typically, this should be

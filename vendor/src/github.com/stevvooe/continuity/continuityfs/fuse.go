@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
+	"time"
 
 	"bazil.org/fuse"
 	"bazil.org/fuse/fs"
@@ -22,6 +23,7 @@ type File struct {
 	inode    uint64
 	uid      uint32
 	gid      uint32
+	ctime    time.Time
 	provider FileContentProvider
 	resource continuity.Resource
 }
@@ -59,6 +61,9 @@ func (f *File) Attr(ctx context.Context, attr *fuse.Attr) (err error) {
 	attr.Mode = f.resource.Mode()
 	attr.Uid = f.uid
 	attr.Gid = f.gid
+	attr.Atime = f.resource.AccessTime()
+	attr.Mtime = f.resource.ModTime()
+	attr.Ctime = f.ctime
 
 	if rf, ok := f.resource.(continuity.RegularFile); ok {
 		attr.Nlink = uint32(len(rf.Paths()))
@@ -69,6 +74,22 @@ func (f *File) Attr(ctx context.Context, attr *fuse.Attr) (err error) {
 
 	attr.Inode = f.inode
 
+	return nil
+}
+
+func (f *File) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+	if xa, ok := f.resource.(continuity.XAttrer); ok {
+		resp.Xattr = xa.XAttrs()[req.Name]
+	}
+	return nil
+}
+
+func (f *File) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+	if xa, ok := f.resource.(continuity.XAttrer); ok {
+		for k := range xa.XAttrs() {
+			resp.Append(k)
+		}
+	}
 	return nil
 }
 
@@ -212,6 +233,22 @@ func (d *Dir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 	}
 
 	return ents, nil
+}
+
+func (d *Dir) Getxattr(ctx context.Context, req *fuse.GetxattrRequest, resp *fuse.GetxattrResponse) error {
+	if xa, ok := d.resource.(continuity.XAttrer); ok {
+		resp.Xattr = xa.XAttrs()[req.Name]
+	}
+	return nil
+}
+
+func (d *Dir) Listxattr(ctx context.Context, req *fuse.ListxattrRequest, resp *fuse.ListxattrResponse) error {
+	if xa, ok := d.resource.(continuity.XAttrer); ok {
+		for k := range xa.XAttrs() {
+			resp.Append(k)
+		}
+	}
+	return nil
 }
 
 func (d *Dir) setResource(r continuity.Resource) (err error) {

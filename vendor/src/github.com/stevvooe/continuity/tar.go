@@ -3,6 +3,7 @@ package continuity
 import (
 	"archive/tar"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 
@@ -35,6 +36,16 @@ func (tc *TarContext) BuildManifest() (*Manifest, error) {
 	}, nil
 }
 
+func cleanName(name string) string {
+	if !filepath.IsAbs(name) {
+		cleaned := make([]byte, len(name)+1)
+		cleaned[0] = filepath.Separator
+		copy(cleaned[1:], name)
+		return string(cleaned)
+	}
+	return name
+}
+
 func (tc *TarContext) AddTarHeader(h *tar.Header, dgsts []digest.Digest) error {
 	// Unused header fields
 	//	Uname      string    // user name of owner
@@ -53,8 +64,10 @@ func (tc *TarContext) AddTarHeader(h *tar.Header, dgsts []digest.Digest) error {
 		xattrs[k] = []byte(v)
 	}
 
+	name := cleanName(h.Name)
+
 	r := resource{
-		paths:  []string{h.Name},
+		paths:  []string{name},
 		mode:   os.FileMode(h.Mode),
 		uid:    strconv.Itoa(h.Uid),
 		gid:    strconv.Itoa(h.Gid),
@@ -75,7 +88,7 @@ func (tc *TarContext) AddTarHeader(h *tar.Header, dgsts []digest.Digest) error {
 		tc.resources = append(tc.resources, &directory{r})
 	case tar.TypeLink:
 		tc.hardLinks = append(tc.hardLinks, hardLink{
-			source: h.Name,
+			source: name,
 			target: h.Linkname,
 		})
 	case tar.TypeSymlink:

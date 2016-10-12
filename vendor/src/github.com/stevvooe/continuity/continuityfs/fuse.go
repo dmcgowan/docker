@@ -18,36 +18,63 @@ import (
 	"golang.org/x/net/context"
 )
 
-// File represents any file type (non directory) in the filesystem
-type File struct {
+type node struct {
 	inode    uint64
 	uid      uint32
 	gid      uint32
 	ctime    time.Time
-	provider FileContentProvider
 	resource continuity.Resource
 }
 
-// NewFile creates a new file with the given inode and content provider
-func NewFile(inode uint64, provider FileContentProvider) *File {
-	return &File{
-		inode:    inode,
-		provider: provider,
+func newNode(inode uint64, t time.Time) node {
+	return node{
+		inode: inode,
+		ctime: t,
 	}
 }
 
-func (f *File) setResource(r continuity.Resource) (err error) {
-	f.uid, err = parseUint32(r.UID())
+func (n *node) setResource(r continuity.Resource) (err error) {
+	n.uid, err = parseUint32(r.UID())
 	if err != nil {
 		return
 	}
-	f.gid, err = parseUint32(r.GID())
+	n.gid, err = parseUint32(r.GID())
 	if err != nil {
 		return
 	}
-	f.resource = r
+	n.resource = r
 
 	return
+}
+
+// Attr sets the fuse attribute for the file
+func (n *node) Attr(ctx context.Context, attr *fuse.Attr) (err error) {
+	attr.Inode = n.inode
+	attr.Uid = n.uid
+	attr.Gid = n.gid
+	attr.Ctime = n.ctime
+
+	if f.resource != nil {
+		attr.Mode = f.resource.Mode()
+		attr.Atime = f.resource.AccessTime()
+		attr.Mtime = f.resource.ModTime()
+	}
+
+	return nil
+}
+
+// File represents any file type (non directory) in the filesystem
+type File struct {
+	node
+	provider FileContentProvider
+}
+
+// NewFile creates a new file with the given inode and content provider
+func NewFile(node node, provider FileContentProvider) *File {
+	return &File{
+		node:     node,
+		provider: provider,
+	}
 }
 
 func parseUint32(s string) (uint32, error) {
@@ -177,7 +204,6 @@ type Dir struct {
 	uid      uint32
 	gid      uint32
 	nodes    map[string]fs.Node
-	provider FileContentProvider
 	resource continuity.Resource
 }
 
@@ -266,11 +292,10 @@ func (d *Dir) setResource(r continuity.Resource) (err error) {
 }
 
 // NewDir creates a new directory object
-func NewDir(inode uint64, provider FileContentProvider) *Dir {
+func NewDir(inode uint64) *Dir {
 	return &Dir{
-		inode:    inode,
-		nodes:    map[string]fs.Node{},
-		provider: provider,
+		inode: inode,
+		nodes: map[string]fs.Node{},
 	}
 }
 
@@ -282,7 +307,7 @@ func addNode(path string, node fs.Node, cache map[string]*Dir, provider FileCont
 	dirPath, file := filepath.Split(path)
 	d, ok := cache[dirPath]
 	if !ok {
-		d = NewDir(0, provider)
+		d = NewDir(0)
 		cache[dirPath] = d
 		addNode(filepath.Clean(dirPath), d, cache, provider)
 	}

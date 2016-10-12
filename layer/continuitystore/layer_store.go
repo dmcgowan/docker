@@ -373,8 +373,8 @@ func (ls *layerStore) CreateRWLayer(name string, parent layer.ChainID, mountLabe
 			return nil, layer.ErrLayerDoesNotExist
 		}
 
-		lower = filepath.Join(ls.writeDir, "checkout", p.manifestID.Algorithm().String(), p.manifestID.Hex())
-		//TODO(dmcgowan): only checkout if does not exist
+		lower = filepath.Join(ls.writeDir, "fuse", p.manifestID.Algorithm().String(), p.manifestID.Hex())
+		//TODO(dmcgowan): only checkout/fuse if does not exist
 
 		if err := os.MkdirAll(lower, 0755); err != nil {
 			return nil, errors.Wrap(err, "failed to make checkout directory")

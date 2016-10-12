@@ -25,6 +25,8 @@ func (fm *fuseMounter) Mount() error {
 	c, err := fuse.Mount(
 		fm.root,
 		fuse.ReadOnly(),
+		// Remove this once mounts properly managed
+		fuse.AllowNonEmptyMount(),
 		fuse.FSName("manifest"),
 		fuse.Subtype("continuity"),
 		// OSX Only options

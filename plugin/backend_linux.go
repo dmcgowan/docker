@@ -36,8 +36,8 @@ var (
 )
 
 // Disable deactivates a plugin, which implies that they cannot be used by containers.
-func (pm *Manager) Disable(name string) error {
-	p, err := pm.config.Store.GetByName(name)
+func (pm *Manager) Disable(refOrID string) error {
+	p, err := pm.config.Store.GetV2Plugin(refOrID)
 	if err != nil {
 		return err
 	}
@@ -48,13 +48,13 @@ func (pm *Manager) Disable(name string) error {
 	if err := pm.disable(p, c); err != nil {
 		return err
 	}
-	pm.config.LogPluginEvent(p.GetID(), name, "disable")
+	pm.config.LogPluginEvent(p.GetID(), refOrID, "disable")
 	return nil
 }
 
 // Enable activates a plugin, which implies that they are ready to be used by containers.
-func (pm *Manager) Enable(name string, config *types.PluginEnableConfig) error {
-	p, err := pm.config.Store.GetByName(name)
+func (pm *Manager) Enable(refOrID string, config *types.PluginEnableConfig) error {
+	p, err := pm.config.Store.GetV2Plugin(refOrID)
 	if err != nil {
 		return err
 	}
@@ -63,18 +63,13 @@ func (pm *Manager) Enable(name string, config *types.PluginEnableConfig) error {
 	if err := pm.enable(p, c, false); err != nil {
 		return err
 	}
-	pm.config.LogPluginEvent(p.GetID(), name, "enable")
+	pm.config.LogPluginEvent(p.GetID(), refOrID, "enable")
 	return nil
 }
 
 // Inspect examines a plugin config
 func (pm *Manager) Inspect(refOrID string) (tp *types.Plugin, err error) {
-	id, err := pm.config.Store.resolvePluginID(refOrID)
-	if err != nil {
-		return nil, err
-	}
-
-	p, err := pm.config.Store.GetByID(id)
+	p, err := pm.config.Store.GetV2Plugin(refOrID)
 	if err != nil {
 		return nil, err
 	}
@@ -90,9 +85,8 @@ func (pm *Manager) pull(name string, metaHeader http.Header, authConfig *types.A
 	}
 	name = ref.String()
 
-	if p, _ := pm.config.Store.GetByName(name); p != nil {
-		logrus.Debug("plugin already exists")
-		return nil, nil, fmt.Errorf("%s exists", name)
+	if err := pm.config.Store.validateName(name); err != nil {
+		return nil, nil, err
 	}
 
 	pd, err := distribution.Pull(ref, pm.config.RegistryService, metaHeader, authConfig)
@@ -229,7 +223,7 @@ func (pm *Manager) List() ([]types.Plugin, error) {
 
 // Push pushes a plugin to the store.
 func (pm *Manager) Push(name string, metaHeader http.Header, authConfig *types.AuthConfig) error {
-	p, err := pm.config.Store.GetByName(name)
+	p, err := pm.config.Store.GetV2Plugin(name)
 	if err != nil {
 		return err
 	}
@@ -259,7 +253,7 @@ func (pm *Manager) Push(name string, metaHeader http.Header, authConfig *types.A
 
 // Remove deletes plugin's root directory.
 func (pm *Manager) Remove(name string, config *types.PluginRmConfig) (err error) {
-	p, err := pm.config.Store.GetByName(name)
+	p, err := pm.config.Store.GetV2Plugin(name)
 	pm.mu.RLock()
 	c := pm.cMap[p]
 	pm.mu.RUnlock()
@@ -301,7 +295,7 @@ func (pm *Manager) Remove(name string, config *types.PluginRmConfig) (err error)
 
 // Set sets plugin args
 func (pm *Manager) Set(name string, args []string) error {
-	p, err := pm.config.Store.GetByName(name)
+	p, err := pm.config.Store.GetV2Plugin(name)
 	if err != nil {
 		return err
 	}
@@ -320,8 +314,8 @@ func (pm *Manager) CreateFromContext(ctx context.Context, tarCtx io.ReadCloser, 
 	}
 	name := reference.WithDefaultTag(ref).String()
 
-	if v, _ := pm.config.Store.GetByName(name); v != nil { // fast check, real check is in createPlugin()
-		return errors.Errorf("plugin %q already exists", name)
+	if err := pm.config.Store.validateName(name); err != nil { // fast check, real check is in createPlugin()
+		return err
 	}
 
 	tmpRootfsDir, err := ioutil.TempDir(pm.tmpDir(), ".rootfs")

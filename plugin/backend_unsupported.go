@@ -25,7 +25,7 @@ func (pm *Manager) Enable(name string, config *types.PluginEnableConfig) error {
 }
 
 // Inspect examines a plugin config
-func (pm *Manager) Inspect(refOrID string) (tp types.Plugin, err error) {
+func (pm *Manager) Inspect(refOrID string) (tp *types.Plugin, err error) {
 	// Even though plugin is not supported, we still want to return `not found`
 	// error so that `docker inspect` (without `--type` specified) returns correct
 	// `not found` message

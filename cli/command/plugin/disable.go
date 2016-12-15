@@ -5,7 +5,6 @@ import (
 
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/cli/command"
-	"github.com/docker/docker/reference"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 )
@@ -24,18 +23,7 @@ func newDisableCommand(dockerCli *command.DockerCli) *cobra.Command {
 }
 
 func runDisable(dockerCli *command.DockerCli, name string) error {
-	named, err := reference.ParseNamed(name) // FIXME: validate
-	if err != nil {
-		return err
-	}
-	if reference.IsNameOnly(named) {
-		named = reference.WithDefaultTag(named)
-	}
-	ref, ok := named.(reference.NamedTagged)
-	if !ok {
-		return fmt.Errorf("invalid name: %s", named.String())
-	}
-	if err := dockerCli.Client().PluginDisable(context.Background(), ref.String()); err != nil {
+	if err := dockerCli.Client().PluginDisable(context.Background(), name); err != nil {
 		return err
 	}
 	fmt.Fprintln(dockerCli.Out(), name)

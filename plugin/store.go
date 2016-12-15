@@ -267,9 +267,9 @@ func (ps *Store) resolvePluginID(idOrName string) (string, error) {
 			}
 			found = p
 		}
-		if found == nil {
-			return "", errors.WithStack(ErrNotFound(idOrName))
-		}
+	}
+	if found == nil {
+		return "", errors.WithStack(ErrNotFound(idOrName))
 	}
 	return found.PluginObj.ID, nil
 }

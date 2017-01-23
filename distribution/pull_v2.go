@@ -361,10 +361,12 @@ func (p *v2Puller) pullV2Tag(ctx context.Context, ref reference.Named) (tagUpdat
 		if !allowedMediatype {
 			configClass := mediaTypeClasses[m.Manifest.Config.MediaType]
 			if configClass == "" {
+				logrus.Warnf("Unsupported config media type %v: may require pushing again if type is unexpected", m.Manifest.Config.MediaType)
 				configClass = "unknown"
 			}
 			return false, fmt.Errorf("target is %s", configClass)
 		}
+		logrus.Debugf("Pulling image config with media type %v", m.Manifest.Config.MediaType)
 	}
 
 	// If manSvc.Get succeeded, we can be confident that the registry on

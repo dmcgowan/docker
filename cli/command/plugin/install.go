@@ -8,7 +8,6 @@ import (
 
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
-	registrytypes "github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/cli/command"
 	"github.com/docker/docker/cli/command/image"
@@ -49,20 +48,6 @@ func newInstallCommand(dockerCli *command.DockerCli) *cobra.Command {
 	command.AddTrustVerificationFlags(flags)
 
 	return cmd
-}
-
-func getRepoIndexFromUnnormalizedRef(ref reference.Named) (*registrytypes.IndexInfo, error) {
-	named, err := reference.ParseNormalizedNamed(ref.Name())
-	if err != nil {
-		return nil, err
-	}
-
-	repoInfo, err := registry.ParseRepositoryInfo(named)
-	if err != nil {
-		return nil, err
-	}
-
-	return repoInfo.Index, nil
 }
 
 type pluginRegistryService struct {

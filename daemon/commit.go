@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types/backend"
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/builder/dockerfile"
@@ -16,7 +17,6 @@ import (
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/layer"
 	"github.com/docker/docker/pkg/ioutils"
-	"github.com/docker/docker/reference"
 )
 
 // merge merges two Config, the image container configuration (defaults values),
@@ -228,7 +228,7 @@ func (daemon *Daemon) Commit(name string, c *backend.ContainerCommitConfig) (str
 
 	imageRef := ""
 	if c.Repo != "" {
-		newTag, err := reference.WithName(c.Repo) // todo: should move this to API layer
+		newTag, err := reference.ParseNormalizedNamed(c.Repo) // todo: should move this to API layer
 		if err != nil {
 			return "", err
 		}
@@ -240,7 +240,7 @@ func (daemon *Daemon) Commit(name string, c *backend.ContainerCommitConfig) (str
 		if err := daemon.TagImageWithReference(id, newTag); err != nil {
 			return "", err
 		}
-		imageRef = newTag.String()
+		imageRef = reference.FamiliarString(newTag)
 	}
 
 	attributes := map[string]string{

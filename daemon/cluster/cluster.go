@@ -52,7 +52,7 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
-	distreference "github.com/docker/distribution/reference"
+	"github.com/docker/distribution/reference"
 	apierrors "github.com/docker/docker/api/errors"
 	apitypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/backend"
@@ -66,13 +66,11 @@ import (
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/stdcopy"
-	"github.com/docker/docker/reference"
 	"github.com/docker/docker/runconfig"
 	swarmapi "github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/manager/encryption"
 	swarmnode "github.com/docker/swarmkit/node"
 	gogotypes "github.com/gogo/protobuf/types"
-	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
 )
@@ -829,50 +827,39 @@ func (c *Cluster) GetServices(options apitypes.ServiceListOptions) ([]types.Serv
 }
 
 // imageWithDigestString takes an image such as name or name:tag
-// and returns the image pinned to a digest, such as name@sha256:34234...
-// Due to the difference between the docker/docker/reference, and the
-// docker/distribution/reference packages, we're parsing the image twice.
-// As the two packages converge, this function should be simplified.
-// TODO(nishanttotla): After the packages converge, the function must
-// convert distreference.Named -> distreference.Canonical, and the logic simplified.
+// and returns the image pinned to a digest, such as name@sha256:34234
+// TODO(dmcgowan): return named type instead of string
 func (c *Cluster) imageWithDigestString(ctx context.Context, image string, authConfig *apitypes.AuthConfig) (string, error) {
-	if _, err := digest.Parse(image); err == nil {
-		return "", errors.New("image reference is an image ID")
-	}
-	ref, err := distreference.ParseNamed(image)
+	ref, err := reference.ParseAnyReference(image)
 	if err != nil {
 		return "", err
 	}
+	namedRef, ok := ref.(reference.Named)
+	if !ok {
+		return "", errors.New("image reference is an image ID")
+	}
 	// only query registry if not a canonical reference (i.e. with digest)
-	if _, ok := ref.(distreference.Canonical); !ok {
-		// create a docker/docker/reference Named object because GetRepository needs it
-		dockerRef, err := reference.ParseNamed(image)
-		if err != nil {
-			return "", err
-		}
-		dockerRef = reference.WithDefaultTag(dockerRef)
-		namedTaggedRef, ok := dockerRef.(reference.NamedTagged)
-		if !ok {
-			return "", errors.New("unable to cast image to NamedTagged reference object")
-		}
+	if _, ok := namedRef.(reference.Canonical); !ok {
+		taggedRef := reference.EnsureTagged(namedRef)
 
-		repo, _, err := c.config.Backend.GetRepository(ctx, namedTaggedRef, authConfig)
+		repo, _, err := c.config.Backend.GetRepository(ctx, taggedRef, authConfig)
 		if err != nil {
 			return "", err
 		}
-		dscrptr, err := repo.Tags(ctx).Get(ctx, namedTaggedRef.Tag())
+		dscrptr, err := repo.Tags(ctx).Get(ctx, taggedRef.Tag())
 		if err != nil {
 			return "", err
 		}
 
-		namedDigestedRef, err := distreference.WithDigest(distreference.EnsureTagged(ref), dscrptr.Digest)
+		namedDigestedRef, err := reference.WithDigest(taggedRef, dscrptr.Digest)
 		if err != nil {
 			return "", err
 		}
-		return namedDigestedRef.String(), nil
+		// return familiar form until interface updated to return type
+		return reference.FamiliarString(namedDigestedRef), nil
 	}
 	// reference already contains a digest, so just return it
-	return ref.String(), nil
+	return reference.FamiliarString(ref), nil
 }
 
 // CreateService creates a new service in a managed swarm cluster.

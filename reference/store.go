@@ -54,15 +54,19 @@ type repository map[string]digest.Digest
 
 type lexicalRefs []reference.Named
 
-func (a lexicalRefs) Len() int           { return len(a) }
-func (a lexicalRefs) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a lexicalRefs) Less(i, j int) bool { return a[i].String() < a[j].String() }
+func (a lexicalRefs) Len() int      { return len(a) }
+func (a lexicalRefs) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a lexicalRefs) Less(i, j int) bool {
+	return reference.FamiliarString(a[i]) < reference.FamiliarString(a[j])
+}
 
 type lexicalAssociations []Association
 
-func (a lexicalAssociations) Len() int           { return len(a) }
-func (a lexicalAssociations) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a lexicalAssociations) Less(i, j int) bool { return a[i].Ref.String() < a[j].Ref.String() }
+func (a lexicalAssociations) Len() int      { return len(a) }
+func (a lexicalAssociations) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a lexicalAssociations) Less(i, j int) bool {
+	return reference.FamiliarString(a[i].Ref) < reference.FamiliarString(a[j].Ref)
+}
 
 // NewReferenceStore creates a new reference store, tied to a file path where
 // the set of references are serialized in JSON format.
@@ -94,7 +98,7 @@ func (store *store) AddTag(ref reference.Named, id digest.Digest, force bool) er
 	if _, isCanonical := ref.(reference.Canonical); isCanonical {
 		return errors.New("refusing to create a tag with a digest reference")
 	}
-	return store.addReference(reference.EnsureTagged(ref), id, force)
+	return store.addReference(reference.TagNameOnly(ref), id, force)
 }
 
 // AddDigest adds a digest reference to the store.
@@ -151,9 +155,7 @@ func (store *store) addReference(ref reference.Named, id digest.Digest, force bo
 // Delete deletes a reference from the store. It returns true if a deletion
 // happened, or false otherwise.
 func (store *store) Delete(ref reference.Named) (bool, error) {
-	if reference.IsNameOnly(ref) {
-		ref = reference.EnsureTagged(ref)
-	}
+	ref = reference.TagNameOnly(ref)
 
 	refName := reference.FamiliarName(ref)
 	refStr := reference.FamiliarString(ref)
@@ -185,9 +187,7 @@ func (store *store) Delete(ref reference.Named) (bool, error) {
 
 // Get retrieves an item from the store by reference
 func (store *store) Get(ref reference.Named) (digest.Digest, error) {
-	if reference.IsNameOnly(ref) {
-		ref = reference.EnsureTagged(ref)
-	}
+	ref = reference.TagNameOnly(ref)
 
 	refName := reference.FamiliarName(ref)
 	refStr := reference.FamiliarString(ref)

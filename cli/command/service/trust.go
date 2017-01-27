@@ -33,10 +33,12 @@ func resolveServiceImageDigest(dockerCli *command.DockerCli, service *swarm.Serv
 		namedRef, ok := ref.(reference.Named)
 		if !ok {
 			return errors.New("failed to resolve image digest using content trust: reference is not named")
-
 		}
-
-		taggedRef := reference.EnsureTagged(namedRef)
+		namedRef = reference.TagNameOnly(namedRef)
+		taggedRef, ok := namedRef.(reference.NamedTagged)
+		if !ok {
+			return errors.New("failed to resolve image digest using content trust: reference is not tagged")
+		}
 
 		resolvedImage, err := trustedResolveDigest(context.Background(), dockerCli, taggedRef)
 		if err != nil {

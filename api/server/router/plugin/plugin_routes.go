@@ -63,9 +63,7 @@ func parseRemoteRef(remote string) (reference.Named, string, error) {
 		return remoteRef, canonical.Tag(), nil
 	}
 
-	if reference.IsNameOnly(remoteRef) {
-		remoteRef = reference.EnsureTagged(remoteRef)
-	}
+	remoteRef = reference.TagNameOnly(remoteRef)
 
 	return remoteRef, "", nil
 }
@@ -121,7 +119,7 @@ func (pr *pluginRouter) pullPlugin(ctx context.Context, w http.ResponseWriter, r
 				}
 				name = reference.FamiliarString(nt)
 			} else {
-				name = reference.FamiliarString(reference.EnsureTagged(trimmed))
+				name = reference.FamiliarString(reference.TagNameOnly(trimmed))
 			}
 		} else {
 			name = reference.FamiliarString(ref)
@@ -136,7 +134,7 @@ func (pr *pluginRouter) pullPlugin(ctx context.Context, w http.ResponseWriter, r
 		}
 		if reference.IsNameOnly(localRef) {
 			// TODO: log change in name to out stream
-			name = reference.FamiliarString(reference.EnsureTagged(localRef))
+			name = reference.FamiliarString(reference.TagNameOnly(localRef))
 		}
 	}
 	w.Header().Set("Docker-Plugin-Name", name)

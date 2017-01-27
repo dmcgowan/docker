@@ -52,9 +52,7 @@ func (daemon *Daemon) PullOnBuild(ctx context.Context, name string, authConfigs 
 	if err != nil {
 		return nil, err
 	}
-	if reference.IsNameOnly(ref) {
-		ref = reference.EnsureTagged(ref)
-	}
+	ref = reference.TagNameOnly(ref)
 
 	pullRegistryAuth := &types.AuthConfig{}
 	if len(authConfigs) > 0 {

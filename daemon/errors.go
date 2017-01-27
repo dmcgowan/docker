@@ -2,25 +2,13 @@ package daemon
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/errors"
 )
 
 func (d *Daemon) imageNotExistToErrcode(err error) error {
 	if dne, isDNE := err.(ErrImageDoesNotExist); isDNE {
-		if strings.Contains(dne.RefOrID, "@") {
-			e := fmt.Errorf("No such image: %s", dne.RefOrID)
-			return errors.NewRequestNotFoundError(e)
-		}
-		ref, err := reference.ParseNormalizedNamed(dne.RefOrID)
-		if err != nil {
-			e := fmt.Errorf("No such image: %s", dne.RefOrID)
-			return errors.NewRequestNotFoundError(e)
-		}
-		e := fmt.Errorf("No such image: %s", reference.FamiliarString(reference.EnsureTagged(ref)))
-		return errors.NewRequestNotFoundError(e)
+		return errors.NewRequestNotFoundError(dne)
 	}
 	return err
 }

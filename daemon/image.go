@@ -11,11 +11,11 @@ import (
 
 // ErrImageDoesNotExist is error returned when no image can be found for a reference.
 type ErrImageDoesNotExist struct {
-	RefOrID string
+	ref reference.Reference
 }
 
 func (e ErrImageDoesNotExist) Error() string {
-	return fmt.Sprintf("no such id: %s", e.RefOrID)
+	return fmt.Sprintf("no such image: %s", reference.FamiliarString(e.ref))
 }
 
 // GetImageID returns an image ID corresponding to the image referred to by
@@ -29,11 +29,11 @@ func (daemon *Daemon) GetImageID(refOrID string) (image.ID, error) {
 	if !ok {
 		digested, ok := ref.(reference.Digested)
 		if !ok {
-			return "", ErrImageDoesNotExist{refOrID}
+			return "", ErrImageDoesNotExist{ref}
 		}
 		id := image.IDFromDigest(digested.Digest())
 		if _, err := daemon.imageStore.Get(id); err != nil {
-			return "", ErrImageDoesNotExist{refOrID}
+			return "", ErrImageDoesNotExist{ref}
 		}
 		return id, nil
 	}
@@ -60,7 +60,7 @@ func (daemon *Daemon) GetImageID(refOrID string) (image.ID, error) {
 		return id, nil
 	}
 
-	return "", ErrImageDoesNotExist{refOrID}
+	return "", ErrImageDoesNotExist{ref}
 }
 
 // GetImage returns an image corresponding to the image referred to by refOrID.

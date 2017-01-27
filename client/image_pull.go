@@ -53,5 +53,9 @@ func getAPITagFromNamedRef(ref reference.Named) string {
 	if digested, ok := ref.(reference.Digested); ok {
 		return digested.Digest().String()
 	}
-	return reference.EnsureTagged(ref).Tag()
+	ref = reference.TagNameOnly(ref)
+	if tagged, ok := ref.(reference.Tagged); ok {
+		return tagged.Tag()
+	}
+	return ""
 }

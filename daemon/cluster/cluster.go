@@ -828,7 +828,6 @@ func (c *Cluster) GetServices(options apitypes.ServiceListOptions) ([]types.Serv
 
 // imageWithDigestString takes an image such as name or name:tag
 // and returns the image pinned to a digest, such as name@sha256:34234
-// TODO(dmcgowan): return named type instead of string
 func (c *Cluster) imageWithDigestString(ctx context.Context, image string, authConfig *apitypes.AuthConfig) (string, error) {
 	ref, err := reference.ParseAnyReference(image)
 	if err != nil {
@@ -836,11 +835,19 @@ func (c *Cluster) imageWithDigestString(ctx context.Context, image string, authC
 	}
 	namedRef, ok := ref.(reference.Named)
 	if !ok {
-		return "", errors.New("image reference is an image ID")
+		if _, ok := ref.(reference.Digested); ok {
+			return "", errors.New("image reference is an image ID")
+		}
+		return "", errors.Errorf("unknown image reference format: %s", image)
 	}
 	// only query registry if not a canonical reference (i.e. with digest)
 	if _, ok := namedRef.(reference.Canonical); !ok {
-		taggedRef := reference.EnsureTagged(namedRef)
+		namedRef = reference.TagNameOnly(namedRef)
+
+		taggedRef, ok := namedRef.(reference.NamedTagged)
+		if !ok {
+			return "", errors.Errorf("image reference not tagged: %s", image)
+		}
 
 		repo, _, err := c.config.Backend.GetRepository(ctx, taggedRef, authConfig)
 		if err != nil {

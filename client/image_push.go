@@ -16,20 +16,20 @@ import (
 // It executes the privileged function if the operation is unauthorized
 // and it tries one more time.
 // It's up to the caller to handle the io.ReadCloser and close it properly.
-func (cli *Client) ImagePush(ctx context.Context, ref string, options types.ImagePushOptions) (io.ReadCloser, error) {
-	distributionRef, err := reference.ParseNormalizedNamed(ref)
+func (cli *Client) ImagePush(ctx context.Context, image string, options types.ImagePushOptions) (io.ReadCloser, error) {
+	ref, err := reference.ParseNormalizedNamed(image)
 	if err != nil {
 		return nil, err
 	}
 
-	if _, isCanonical := distributionRef.(reference.Canonical); isCanonical {
+	if _, isCanonical := ref.(reference.Canonical); isCanonical {
 		return nil, errors.New("cannot push a digest reference")
 	}
 
 	tag := ""
-	name := reference.FamiliarName(distributionRef)
+	name := reference.FamiliarName(ref)
 
-	if nameTaggedRef, isNamedTagged := distributionRef.(reference.NamedTagged); isNamedTagged {
+	if nameTaggedRef, isNamedTagged := ref.(reference.NamedTagged); isNamedTagged {
 		tag = nameTaggedRef.Tag()
 	}
 

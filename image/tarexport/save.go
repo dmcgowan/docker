@@ -54,9 +54,9 @@ func (l *tarexporter) parseNames(names []string) (map[image.ID]*imageDescriptor,
 			if _, ok := ref.(reference.Canonical); ok {
 				return
 			}
-			tagged, ok := ref.(reference.NamedTagged)
+			tagged, ok := reference.TagNameOnly(ref).(reference.NamedTagged)
 			if !ok {
-				tagged = reference.EnsureTagged(ref)
+				return
 			}
 
 			for _, t := range imgDescr[id].refs {
@@ -84,9 +84,8 @@ func (l *tarexporter) parseNames(names []string) (map[image.ID]*imageDescriptor,
 				}
 				addAssoc(id, nil)
 				continue
-			} else {
-				return nil, errors.Errorf("invalid reference: %v", name)
 			}
+			return nil, errors.Errorf("invalid reference: %v", name)
 		}
 
 		if reference.FamiliarName(namedRef) == string(digest.Canonical) {

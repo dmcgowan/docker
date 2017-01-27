@@ -220,7 +220,7 @@ func (pm *Manager) Pull(ctx context.Context, ref reference.Named, name string, m
 	if err != nil {
 		return errors.Wrapf(err, "failed to parse %q", name)
 	}
-	name = reference.FamiliarString(reference.EnsureTagged(nameref))
+	name = reference.FamiliarString(reference.TagNameOnly(nameref))
 
 	if err := pm.config.Store.validateName(name); err != nil {
 		return err
@@ -537,7 +537,7 @@ func (pm *Manager) CreateFromContext(ctx context.Context, tarCtx io.ReadCloser, 
 	if _, ok := ref.(reference.Canonical); ok {
 		return errors.Errorf("canonical references are not permitted")
 	}
-	name := reference.FamiliarString(reference.EnsureTagged(ref))
+	name := reference.FamiliarString(reference.TagNameOnly(ref))
 
 	if err := pm.config.Store.validateName(name); err != nil { // fast check, real check is in createPlugin()
 		return err

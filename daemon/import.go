@@ -2,7 +2,6 @@ package daemon
 
 import (
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,6 +18,7 @@ import (
 	"github.com/docker/docker/pkg/httputils"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/streamformatter"
+	"github.com/pkg/errors"
 )
 
 // ImportImage imports an image, getting the archived layer data either from
@@ -39,9 +39,8 @@ func (daemon *Daemon) ImportImage(src string, repository, tag string, msg string
 		if err != nil {
 			return err
 		}
-
-		if _, isCanonical := newRef.(reference.Canonical); isCanonical {
-			return errors.New("cannot import digest reference")
+		if !reference.IsNameOnly(newRef) {
+			return errors.Errorf("unexpected repository name: %s", repository)
 		}
 
 		if tag != "" {

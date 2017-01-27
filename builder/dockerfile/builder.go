@@ -185,7 +185,7 @@ func sanitizeRepoAndTags(names []string) ([]reference.Named, error) {
 			return nil, errors.New("build tag cannot contain a digest")
 		}
 
-		ref = reference.EnsureTagged(ref)
+		ref = reference.TagNameOnly(ref)
 
 		nameWithTag := ref.String()
 

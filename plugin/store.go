@@ -239,10 +239,10 @@ func (ps *Store) resolvePluginID(idOrName string) (string, error) {
 		return "", errors.WithStack(ErrNotFound(idOrName))
 	}
 
-	fullRef := reference.EnsureTagged(ref)
+	ref = reference.TagNameOnly(ref)
 
 	for _, p := range ps.plugins {
-		if p.PluginObj.Name == reference.FamiliarString(fullRef) {
+		if p.PluginObj.Name == reference.FamiliarString(ref) {
 			return p.PluginObj.ID, nil
 		}
 	}

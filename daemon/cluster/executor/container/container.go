@@ -136,7 +136,7 @@ func (c *containerConfig) image() string {
 	if err != nil {
 		return raw
 	}
-	return reference.FamiliarString(reference.EnsureTagged(ref))
+	return reference.FamiliarString(reference.TagNameOnly(ref))
 }
 
 func (c *containerConfig) portBindings() nat.PortMap {

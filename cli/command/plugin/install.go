@@ -86,7 +86,7 @@ func runInstall(dockerCli *command.DockerCli, opts pluginOptions) error {
 		if _, ok := aref.(reference.Canonical); ok {
 			return fmt.Errorf("invalid name: %s", opts.alias)
 		}
-		alias = reference.FamiliarString(reference.EnsureTagged(aref))
+		alias = reference.FamiliarString(reference.TagNameOnly(aref))
 	}
 	ctx := context.Background()
 
@@ -99,13 +99,14 @@ func runInstall(dockerCli *command.DockerCli, opts pluginOptions) error {
 
 	_, isCanonical := ref.(reference.Canonical)
 	if command.IsTrusted() && !isCanonical {
+		ref = reference.TagNameOnly(ref)
 		if alias == "" {
 			alias = reference.FamiliarString(ref)
 		}
 
 		nt, ok := ref.(reference.NamedTagged)
 		if !ok {
-			nt = reference.EnsureTagged(ref)
+			return fmt.Errorf("invalid name: %s", alias)
 		}
 
 		trusted, err := image.TrustedReference(ctx, dockerCli, nt, newRegistryService())

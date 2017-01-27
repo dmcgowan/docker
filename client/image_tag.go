@@ -23,12 +23,13 @@ func (cli *Client) ImageTag(ctx context.Context, source, target string) error {
 		return errors.New("refusing to create a tag with a digest reference")
 	}
 
-	taggedRef := reference.EnsureTagged(ref)
-	tag := taggedRef.Tag()
+	ref = reference.TagNameOnly(ref)
 
 	query := url.Values{}
-	query.Set("repo", reference.FamiliarName(taggedRef))
-	query.Set("tag", tag)
+	query.Set("repo", reference.FamiliarName(ref))
+	if tagged, ok := ref.(reference.Tagged); ok {
+		query.Set("tag", tagged.Tag())
+	}
 
 	resp, err := cli.post(ctx, "/images/"+source+"/tag", query, nil, nil)
 	ensureReaderClosed(resp)

@@ -22,10 +22,12 @@ func (cli *Client) ContainerCommit(ctx context.Context, container string, option
 		if _, isCanonical := ref.(reference.Canonical); isCanonical {
 			return types.IDResponse{}, errors.New("refusing to create a tag with a digest reference")
 		}
-		taggedRef := reference.EnsureTagged(ref)
+		ref = reference.TagNameOnly(ref)
 
-		tag = taggedRef.Tag()
-		repository = reference.FamiliarName(taggedRef)
+		if tagged, ok := ref.(reference.Tagged); ok {
+			tag = tagged.Tag()
+		}
+		repository = reference.FamiliarName(ref)
 	}
 
 	query := url.Values{}

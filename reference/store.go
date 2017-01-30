@@ -57,7 +57,7 @@ type lexicalRefs []reference.Named
 func (a lexicalRefs) Len() int      { return len(a) }
 func (a lexicalRefs) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a lexicalRefs) Less(i, j int) bool {
-	return reference.FamiliarString(a[i]) < reference.FamiliarString(a[j])
+	return a[i].String() < a[j].String()
 }
 
 type lexicalAssociations []Association
@@ -65,7 +65,7 @@ type lexicalAssociations []Association
 func (a lexicalAssociations) Len() int      { return len(a) }
 func (a lexicalAssociations) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a lexicalAssociations) Less(i, j int) bool {
-	return reference.FamiliarString(a[i].Ref) < reference.FamiliarString(a[j].Ref)
+	return a[i].Ref.String() < a[j].Ref.String()
 }
 
 // NewReferenceStore creates a new reference store, tied to a file path where

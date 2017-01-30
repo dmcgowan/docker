@@ -15,7 +15,11 @@ type ErrImageDoesNotExist struct {
 }
 
 func (e ErrImageDoesNotExist) Error() string {
-	return fmt.Sprintf("no such image: %s", reference.FamiliarString(e.ref))
+	ref := e.ref
+	if named, ok := ref.(reference.Named); ok {
+		ref = reference.TagNameOnly(named)
+	}
+	return fmt.Sprintf("no such image: %s", reference.FamiliarString(ref))
 }
 
 // GetImageID returns an image ID corresponding to the image referred to by

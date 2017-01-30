@@ -668,10 +668,6 @@ func numOfMatchingPathComponents(pth string, matchComponents []string) int {
 }
 
 func getPathComponents(path string) []string {
-	named, err := reference.ParseNormalizedNamed(path)
-	if err == nil {
-		path = named.Name()
-	}
 	return strings.Split(path, "/")
 }
 

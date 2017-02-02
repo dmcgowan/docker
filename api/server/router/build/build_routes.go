@@ -223,3 +223,30 @@ func (br *buildRouter) postBuild(ctx context.Context, w http.ResponseWriter, r *
 
 	return nil
 }
+
+func (br *buildRouter) postBuildAttach(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	sessionID := r.FormValue("session")
+
+	hijacker, ok := w.(http.Hijacker)
+	if !ok {
+		return fmt.Errorf("error attaching to session %s, hijack connection missing", sessionID)
+	}
+
+	conn, _, err := hijacker.Hijack()
+	if err != nil {
+		return err
+	}
+
+	_, upgrade := r.Header["Upgrade"]
+
+	// set raw mode
+	conn.Write([]byte{})
+
+	if upgrade {
+		fmt.Fprintf(conn, "HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
+	} else {
+		fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.docker.raw-stream\r\n\r\n")
+	}
+
+	return br.backend.AttachSession(ctx, conn, sessionID)
+}

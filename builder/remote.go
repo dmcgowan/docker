@@ -7,6 +7,7 @@ import (
 	"io"
 	"io/ioutil"
 	"regexp"
+	"strings"
 
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/httputils"
@@ -74,6 +75,8 @@ func DetectContextFromRemoteURL(r io.ReadCloser, remoteURL string, createProgres
 	switch {
 	case remoteURL == "":
 		context, err = MakeTarSumContext(r)
+	case strings.HasPrefix(remoteURL, "session://"):
+		context, err = makeSessionContext(remoteURL[10:])
 	case urlutil.IsGitURL(remoteURL):
 		context, err = MakeGitContext(remoteURL)
 	case urlutil.IsURL(remoteURL):

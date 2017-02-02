@@ -59,6 +59,7 @@ type buildOptions struct {
 	securityOpt    []string
 	networkMode    string
 	squash         bool
+	stream         bool
 }
 
 // NewBuildCommand creates a new `docker build` command
@@ -114,6 +115,9 @@ func NewBuildCommand(dockerCli *command.DockerCli) *cobra.Command {
 	flags.SetAnnotation("squash", "experimental", nil)
 	flags.SetAnnotation("squash", "version", []string{"1.25"})
 
+	flags.BoolVar(&options.stream, "stream", false, "Stream attaches to server to negotiate build context")
+	flags.SetAnnotation("stream", "experimental", nil)
+	flags.SetAnnotation("stream", "version", []string{"1.26"})
 	return cmd
 }
 
@@ -176,7 +180,7 @@ func runBuild(dockerCli *command.DockerCli, options buildOptions) error {
 		contextDir = tempDir
 	}
 
-	if buildCtx == nil {
+	if buildCtx == nil && !options.stream {
 		// And canonicalize dockerfile name to a platform-independent one
 		relDockerfile, err = archive.CanonicalTarNameForPath(relDockerfile)
 		if err != nil {
@@ -229,25 +233,68 @@ func runBuild(dockerCli *command.DockerCli, options buildOptions) error {
 		}
 	}
 
-	ctx := context.Background()
-
-	var resolvedTags []*resolvedTag
-	if command.IsTrusted() {
-		translator := func(ctx context.Context, ref reference.NamedTagged) (reference.Canonical, error) {
-			return TrustedReference(ctx, dockerCli, ref, nil)
+	var (
+		ctx           = context.Background()
+		body          io.Reader
+		remoteContext string
+		resolvedTags  []*resolvedTag
+	)
+	if buildCtx != nil {
+		if command.IsTrusted() {
+			translator := func(ctx context.Context, ref reference.NamedTagged) (reference.Canonical, error) {
+				return TrustedReference(ctx, dockerCli, ref, nil)
+			}
+			// Wrap the tar archive to replace the Dockerfile entry with the rewritten
+			// Dockerfile which uses trusted pulls.
+			buildCtx = replaceDockerfileTarWrapper(ctx, buildCtx, relDockerfile, translator, &resolvedTags)
 		}
-		// Wrap the tar archive to replace the Dockerfile entry with the rewritten
-		// Dockerfile which uses trusted pulls.
-		buildCtx = replaceDockerfileTarWrapper(ctx, buildCtx, relDockerfile, translator, &resolvedTags)
-	}
 
-	// Setup an upload progress bar
-	progressOutput := streamformatter.NewStreamFormatter().NewProgressOutput(progBuff, true)
-	if !dockerCli.Out().IsTerminal() {
-		progressOutput = &lastProgressOutput{output: progressOutput}
-	}
+		// Setup an upload progress bar
+		progressOutput := streamformatter.NewStreamFormatter().NewProgressOutput(progBuff, true)
+		if !dockerCli.Out().IsTerminal() {
+			progressOutput = &lastProgressOutput{output: progressOutput}
+		}
 
-	var body io.Reader = progress.NewProgressReader(buildCtx, progressOutput, 0, "", "Sending build context to Docker daemon")
+		body = progress.NewProgressReader(buildCtx, progressOutput, 0, "", "Sending build context to Docker daemon")
+	} else {
+		// And canonicalize dockerfile name to a platform-independent one
+		relDockerfile, err = archive.CanonicalTarNameForPath(relDockerfile)
+		if err != nil {
+			return fmt.Errorf("cannot canonicalize dockerfile path %s: %v", relDockerfile, err)
+		}
+
+		f, err := os.Open(filepath.Join(contextDir, ".dockerignore"))
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		defer f.Close()
+
+		rewrites := map[string]string{}
+		if err == nil {
+			excludes, err := dockerignore.ReadAll(f)
+			if err != nil {
+				return err
+			}
+			for _, exclude := range excludes {
+				rewrites[exclude] = ""
+			}
+		}
+
+		rewrites[".dockerignore"] = ".dockerignore"
+
+		if command.IsTrusted() {
+			// TODO: Create copy of docker file in temp directory, rewrite dockerfile to temp file
+		} else {
+			rewrites[relDockerfile] = relDockerfile
+		}
+
+		sessionID, err := dockerCli.Client().ImageBuildSync(ctx, contextDir, rewrites)
+		if err != nil {
+			return err
+		}
+
+		remoteContext = "session://" + sessionID
+	}
 
 	var memory int64
 	if options.memory != "" {
@@ -306,6 +353,7 @@ func runBuild(dockerCli *command.DockerCli, options buildOptions) error {
 		SecurityOpt:    options.securityOpt,
 		NetworkMode:    options.networkMode,
 		Squash:         options.squash,
+		RemoteContext:  remoteContext,
 	}
 
 	response, err := dockerCli.Client().ImageBuild(ctx, body, buildOptions)

@@ -118,6 +118,11 @@ func (bm *BuildManager) BuildFromContext(ctx context.Context, src io.ReadCloser,
 	return b.build(pg.StdoutFormatter, pg.StderrFormatter, pg.Output)
 }
 
+// AttachSession builds a new image from a given context.
+func (bm *BuildManager) AttachSession(ctx context.Context, src io.ReadWriteCloser, sessionID string) error {
+	return builder.AttachSession(src, sessionID)
+}
+
 // NewBuilder creates a new Dockerfile builder from an optional dockerfile and a Config.
 // If dockerfile is nil, the Dockerfile specified by Config.DockerfileName,
 // will be read from the Context passed to Build().

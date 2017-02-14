@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,6 +24,7 @@ import (
 	"github.com/docker/docker/pkg/streamformatter"
 	"github.com/docker/go-units"
 	"golang.org/x/net/context"
+	"golang.org/x/net/http2"
 )
 
 func newImageBuildOptions(ctx context.Context, r *http.Request) (*types.ImageBuildOptions, error) {
@@ -227,6 +229,11 @@ func (br *buildRouter) postBuild(ctx context.Context, w http.ResponseWriter, r *
 func (br *buildRouter) postBuildAttach(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	sessionID := r.FormValue("session")
 
+	if r.Header.Get("Upgrade") != "h2c" {
+		// Bad request
+		return fmt.Errorf("required upgrade to http2")
+	}
+
 	hijacker, ok := w.(http.Hijacker)
 	if !ok {
 		return fmt.Errorf("error attaching to session %s, hijack connection missing", sessionID)
@@ -237,16 +244,41 @@ func (br *buildRouter) postBuildAttach(ctx context.Context, w http.ResponseWrite
 		return err
 	}
 
-	_, upgrade := r.Header["Upgrade"]
-
 	// set raw mode
 	conn.Write([]byte{})
 
-	if upgrade {
-		fmt.Fprintf(conn, "HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
-	} else {
-		fmt.Fprintf(conn, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.docker.raw-stream\r\n\r\n")
+	fmt.Fprintf(conn, "HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n")
+
+	s := http2.Server{}
+	co := &http2.ServeConnOpts{
+		// Attach grpc server
+		Handler: th{ctx, br},
 	}
 
-	return br.backend.AttachSession(ctx, conn, sessionID)
+	go s.ServeConn(conn, co)
+
+	return nil
+}
+
+type th struct {
+	ctx context.Context
+	br  *buildRouter
+}
+
+func (t th) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	sessionID := r.FormValue("session")
+
+	logrus.Debugf("Handling http2 call: %#v", r)
+
+	if err := t.br.backend.AttachSession(t.ctx, nopwriter{r.Body}, sessionID); err != nil {
+		http.Error(rw, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+type nopwriter struct {
+	io.ReadCloser
+}
+
+func (nopwriter) Write([]byte) (int, error) {
+	return 0, errors.New("cannot write back")
 }

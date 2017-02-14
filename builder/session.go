@@ -154,5 +154,11 @@ func startSessionContext(sessionID string, stream io.ReadWriteCloser) error {
 	sessions[sessionID] = context
 	sessionL.Unlock()
 
+	// TODO: Make this async...
+	<-context.syncC
+	if context.syncErr != nil {
+		return context.syncErr
+	}
+
 	return nil
 }

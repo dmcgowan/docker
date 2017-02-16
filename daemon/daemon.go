@@ -27,6 +27,7 @@ import (
 	"github.com/docker/docker/daemon/discovery"
 	"github.com/docker/docker/daemon/events"
 	"github.com/docker/docker/daemon/exec"
+	"github.com/docker/docker/layer/snapshot"
 	// register graph drivers
 	_ "github.com/docker/docker/daemon/graphdriver/register"
 	"github.com/docker/docker/daemon/initlayer"
@@ -577,18 +578,25 @@ func NewDaemon(config *config.Config, registryService registry.Service, containe
 		return nil, errors.Wrap(err, "couldn't create plugin manager")
 	}
 
-	d.layerStore, err = layer.NewStoreFromOptions(layer.StoreOptions{
-		StorePath:                 config.Root,
-		MetadataStorePathTemplate: filepath.Join(config.Root, "image", "%s", "layerdb"),
-		GraphDriver:               driverName,
-		GraphDriverOptions:        config.GraphOptions,
-		UIDMaps:                   uidMaps,
-		GIDMaps:                   gidMaps,
-		PluginGetter:              d.PluginStore,
-		ExperimentalEnabled:       config.Experimental,
-	})
-	if err != nil {
-		return nil, err
+	if driverName == "snapshot" {
+		d.layerStore, err = snapshot.NewSnapshotStore(filepath.Join(config.Root, "image", "snapshot", "layerstore"))
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		d.layerStore, err = layer.NewStoreFromOptions(layer.StoreOptions{
+			StorePath:                 config.Root,
+			MetadataStorePathTemplate: filepath.Join(config.Root, "image", "%s", "layerdb"),
+			GraphDriver:               driverName,
+			GraphDriverOptions:        config.GraphOptions,
+			UIDMaps:                   uidMaps,
+			GIDMaps:                   gidMaps,
+			PluginGetter:              d.PluginStore,
+			ExperimentalEnabled:       config.Experimental,
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	graphDriver := d.layerStore.DriverName()

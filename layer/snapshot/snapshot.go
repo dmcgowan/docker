@@ -445,10 +445,10 @@ func createChainIDFromParent(parent layer.ChainID, dgsts ...layer.DiffID) layer.
 
 func (ls *layerStore) deleteLayer(rl *roLayer, metadata *layer.Metadata) error {
 	var err error
-	//err = ls.store.Remove(rl.chainID)
-	//if err != nil {
-	//	return err
-	//}
+	err = ls.snapshotter.Remove(rl.snapshotName())
+	if err != nil {
+		return errors.Wrap(err, "failed to delete snapshot")
+	}
 	metadata.DiffID = rl.diffID
 	metadata.ChainID = rl.chainID
 	metadata.Size, err = rl.Size()
@@ -628,12 +628,11 @@ func (ls *layerStore) ReleaseRWLayer(l layer.RWLayer) ([]layer.Metadata, error) 
 		return []layer.Metadata{}, nil
 	}
 
-	// TODO: Rollback
-	//if err := ls.driver.Remove(m.mountID); err != nil {
-	//	logrus.Errorf("Error removing mounted layer %s: %s", m.name, err)
-	//	m.retakeReference(l)
-	//	return nil, err
-	//}
+	if err := ls.snapshotter.Remove(m.mountPath()); err != nil {
+		logrus.Errorf("Error removing mounted layer %s: %s", m.name, err)
+		m.retakeReference(l)
+		return nil, err
+	}
 
 	if err := ls.store.RemoveMount(m.name); err != nil {
 		logrus.Errorf("Error removing mount metadata: %s: %s", m.name, err)

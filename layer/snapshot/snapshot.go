@@ -24,6 +24,7 @@ package snapshot
 //    - some drivers apply tars onto existing directories, applying whiteout actions immediately
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -35,12 +36,11 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/dmcgowan/containerd"
+	"github.com/dmcgowan/containerd/archive"
 	"github.com/dmcgowan/containerd/snapshot"
 	"github.com/dmcgowan/containerd/snapshot/overlay"
 	"github.com/docker/distribution"
 	"github.com/docker/docker/layer"
-	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/chrootarchive"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/vbatts/tar-split/tar/asm"
@@ -213,7 +213,7 @@ func (ls *layerStore) applyTar(tx *fileMetadataTransaction, ts io.Reader, parent
 
 	tsw, err := tx.TarSplitWriter(true)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create tar split writer")
 	}
 	metaPacker := storage.NewJSONPacker(tsw)
 	defer tsw.Close()
@@ -222,12 +222,12 @@ func (ls *layerStore) applyTar(tx *fileMetadataTransaction, ts io.Reader, parent
 	// directory untar the contents into mountDir
 	rdr, err := asm.NewInputTarStream(tr, metaPacker, nil)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create new tar input stream")
 	}
 
 	mountDir, err := ioutil.TempDir(ls.mountDir, "apply-tar-")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create temp tar directory for mount")
 	}
 
 	// TODO: capture error
@@ -235,7 +235,7 @@ func (ls *layerStore) applyTar(tx *fileMetadataTransaction, ts io.Reader, parent
 
 	mounts, err := ls.snapshotter.Prepare(mountDir, parent.snapshotName())
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to prepare snapshot")
 	}
 
 	logrus.Debugf("Mounting: %#v", mounts)
@@ -245,14 +245,13 @@ func (ls *layerStore) applyTar(tx *fileMetadataTransaction, ts io.Reader, parent
 	}
 
 	// Use uid and gid maps
-	options := &archive.TarOptions{}
 	start := time.Now().UTC()
 	logrus.Debug("Start untar layer")
-	size, err := chrootarchive.ApplyUncompressedLayer(mountDir, rdr, options)
+	size, err := archive.Apply(context.Background(), mountDir, rdr)
 	if err != nil {
 		syscall.Unmount(mountDir, 0)
 		// TODO: log unmount error
-		return err
+		return errors.Wrap(err, "apply tar failed")
 	}
 	logrus.Debugf("Untar time: %vs", time.Now().UTC().Sub(start).Seconds())
 
@@ -260,7 +259,7 @@ func (ls *layerStore) applyTar(tx *fileMetadataTransaction, ts io.Reader, parent
 	io.Copy(ioutil.Discard, rdr) // ignore error as reader may be closed
 
 	if err := syscall.Unmount(mountDir, 0); err != nil {
-		return err
+		return errors.Wrap(err, "failed to unmount apply tar mount")
 	}
 
 	rl.size = size
@@ -269,7 +268,7 @@ func (ls *layerStore) applyTar(tx *fileMetadataTransaction, ts io.Reader, parent
 
 	// TODO: Get directory
 	if err := ls.snapshotter.Commit(rl.snapshotName(), mountDir); err != nil {
-		return err
+		return errors.Wrap(err, "failed to commit snapshot")
 	}
 
 	logrus.Debugf("Applied tar %s to %s, size: %d", rl.diffID, rl.snapshotName(), size)
@@ -318,11 +317,11 @@ func (ls *layerStore) registerWithDescriptor(ts io.Reader, parent layer.ChainID,
 
 	tx, err := ls.store.StartTransaction()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to start transaction")
 	}
 
 	if err = ls.applyTar(tx, ts, p, rl); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "apply tar failed")
 	}
 
 	if rl.parent == nil {
@@ -341,7 +340,7 @@ func (ls *layerStore) registerWithDescriptor(ts io.Reader, parent layer.ChainID,
 	}()
 
 	if err = storeLayer(tx, rl); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to store layer metadata")
 	}
 
 	ls.layerL.Lock()
@@ -354,7 +353,7 @@ func (ls *layerStore) registerWithDescriptor(ts io.Reader, parent layer.ChainID,
 	}
 
 	if err = tx.Commit(rl.chainID); err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to commit layer metadata")
 	}
 
 	ls.layerMap[rl.chainID] = rl
@@ -365,15 +364,16 @@ func (ls *layerStore) registerWithDescriptor(ts io.Reader, parent layer.ChainID,
 func (ls *layerStore) assembleTarTo(chainID layer.ChainID, metadata io.ReadCloser, w io.Writer) error {
 	md, err := ioutil.TempDir(ls.mountDir, "assemble-tar-")
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create assemble tar mount dir")
 	}
 	mounts, err := ls.snapshotter.Prepare(md, chainID.String())
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to prepare snapshot for %v", chainID.String())
 	}
+	defer ls.snapshotter.Remove(md)
 
 	if err := containerd.MountAll(mounts, md); err != nil {
-		return err
+		return errors.Wrap(err, "failed to mount")
 	}
 	// TODO: Need to do unmount all....
 	defer syscall.Unmount(md, 0)
@@ -382,7 +382,11 @@ func (ls *layerStore) assembleTarTo(chainID layer.ChainID, metadata io.ReadClose
 	defer metadata.Close()
 
 	logrus.Debugf("Assembling tar data for %v", chainID)
-	return asm.WriteOutputTarStream(storage.NewPathFileGetter(md), metaUnpacker, w)
+	if err := asm.WriteOutputTarStream(storage.NewPathFileGetter(md), metaUnpacker, w); err != nil {
+		return errors.Wrap(err, "failed to assemble tar data")
+	}
+
+	return nil
 }
 
 func (ls *layerStore) getWithoutLock(layerID layer.ChainID) *roLayer {

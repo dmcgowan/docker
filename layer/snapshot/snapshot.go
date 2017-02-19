@@ -237,6 +237,7 @@ func (ls *layerStore) applyTar(tx *fileMetadataTransaction, ts io.Reader, parent
 	if err != nil {
 		return errors.Wrap(err, "failed to prepare snapshot")
 	}
+	defer ls.snapshotter.Remove(mountDir)
 
 	logrus.Debugf("Mounting: %#v", mounts)
 

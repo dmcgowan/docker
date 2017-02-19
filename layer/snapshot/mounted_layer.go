@@ -61,8 +61,7 @@ func (ml *mountedLayer) TarStream() (r io.ReadCloser, err error) {
 		if err := os.Mkdir(parentKey, 0700); err != nil {
 			return nil, errors.Wrap(err, "failed to make parent directory")
 		}
-		// TODO: Use view, currently not implemented
-		parentMounts, err = ml.layerStore.snapshotter.Prepare(parentKey, ml.initName)
+		parentMounts, err = ml.layerStore.snapshotter.View(parentKey, ml.initName)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to prepare parent directory")
 		}
@@ -84,11 +83,9 @@ func (ml *mountedLayer) TarStream() (r io.ReadCloser, err error) {
 		// TODO: log errors
 		if parentKey != "" {
 			syscall.Unmount(parentKey, 0)
-			// TODO: not implemented
-			//ml.layerStore.snapshotter.Remove(parentKey)
+			ml.layerStore.snapshotter.Remove(parentKey)
 		}
 		syscall.Unmount(diffKey, 0)
-		// TODO: not implemented
 
 		os.RemoveAll(td)
 		return ar.Close()

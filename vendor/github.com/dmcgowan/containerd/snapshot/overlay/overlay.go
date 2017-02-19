@@ -1,3 +1,4 @@
+// overlay snapshot driver leverages Linux's overlayfs
 package overlay
 
 import (
@@ -101,7 +102,7 @@ func (o *Snapshotter) stat(path string) (snapshot.Info, error) {
 }
 
 func (o *Snapshotter) Prepare(key, parent string) ([]containerd.Mount, error) {
-	active, err := o.newActiveDir(key)
+	active, err := o.newActiveDir(key, false)
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +115,18 @@ func (o *Snapshotter) Prepare(key, parent string) ([]containerd.Mount, error) {
 }
 
 func (o *Snapshotter) View(key, parent string) ([]containerd.Mount, error) {
-	panic("not implemented")
+	if parent == "" {
+		return nil, errors.New("view must have parent")
+	}
+
+	active, err := o.newActiveDir(key, true)
+	if err != nil {
+		return nil, err
+	}
+	if err := active.setParent(parent); err != nil {
+		return nil, err
+	}
+	return active.mounts(o.links)
 }
 
 // Mounts returns the mounts for the transaction identified by key. Can be
@@ -134,7 +146,42 @@ func (o *Snapshotter) Commit(name, key string) error {
 // Remove abandons the transaction identified by key. All resources
 // associated with the key will be removed.
 func (o *Snapshotter) Remove(key string) error {
-	panic("not implemented")
+	indexFile := filepath.Join(o.root, "index", hash(key))
+	path, err := o.links.get(indexFile)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+
+		return errors.Errorf("snapshot %v not found", key)
+	}
+
+	if c, err := ioutil.ReadDir(filepath.Join(path, "children")); err == nil {
+		if len(c) > 0 {
+			return errors.New("key has children")
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if _, err := os.Stat(filepath.Join(path, "parent")); err == nil {
+		if err1 := os.Remove(filepath.Join(path, "parent", "children", hash(key))); err == nil {
+			err = errors.Wrap(err1, "failed to remove parent link")
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if err1 := os.RemoveAll(path); err == nil {
+		// TODO: Check for mounts or other possible usage
+		err = errors.Wrap(err1, "failed to remove data directory")
+	}
+
+	if err1 := os.Remove(indexFile); err == nil {
+		err = errors.Wrap(err1, "failed to remove index")
+	}
+
+	return err
 }
 
 // Walk the committed snapshots.
@@ -174,7 +221,7 @@ func (o *Snapshotter) Walk(fn func(snapshot.Info) error) error {
 	})
 }
 
-func (o *Snapshotter) newActiveDir(key string) (*activeDir, error) {
+func (o *Snapshotter) newActiveDir(key string, readonly bool) (*activeDir, error) {
 	var (
 		path      = filepath.Join(o.root, "active", hash(key))
 		name      = filepath.Join(path, "name")
@@ -185,11 +232,18 @@ func (o *Snapshotter) newActiveDir(key string) (*activeDir, error) {
 		committedDir: filepath.Join(o.root, "committed"),
 		indexlink:    indexlink,
 	}
-	for _, p := range []string{
-		"work",
-		"fs",
-	} {
-		if err := os.MkdirAll(filepath.Join(path, p), 0700); err != nil {
+	if !readonly {
+		for _, p := range []string{
+			"work",
+			"fs",
+		} {
+			if err := os.MkdirAll(filepath.Join(path, p), 0700); err != nil {
+				a.delete()
+				return nil, err
+			}
+		}
+	} else {
+		if err := os.MkdirAll(path, 0700); err != nil {
 			a.delete()
 			return nil, err
 		}
@@ -232,10 +286,20 @@ func (a *activeDir) delete() error {
 }
 
 func (a *activeDir) setParent(name string) error {
-	return os.Symlink(filepath.Join(a.committedDir, hash(name)), filepath.Join(a.path, "parent"))
+	if err := os.Symlink(filepath.Join(a.committedDir, hash(name)), filepath.Join(a.path, "parent")); err != nil {
+		return err
+	}
+	return os.Symlink(a.indexlink, filepath.Join(a.path, "parent", "children", filepath.Base(a.indexlink)))
 }
 
 func (a *activeDir) commit(name string, c *cache) error {
+	if _, err := os.Stat(filepath.Join(a.path, "fs")); err != nil {
+		if os.IsNotExist(err) {
+			return errors.New("cannot commit view")
+		}
+		return err
+	}
+
 	// TODO(stevvooe): This doesn't quite meet the current model. The new model
 	// is to copy all of this out and let the transaction continue. We don't
 	// really have tests for it yet, but this will be the spot to fix it.
@@ -264,7 +328,26 @@ func (a *activeDir) commit(name string, c *cache) error {
 	}
 
 	indexlink := filepath.Join(filepath.Dir(a.indexlink), hash(name))
-	return os.Symlink(committed, indexlink)
+	if err := os.Symlink(committed, indexlink); err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Join(committed, "children"), 0700); err != nil {
+		return err
+	}
+
+	// update child symlink if has parent
+	if _, err := os.Stat(filepath.Join(committed, "parent")); err == nil {
+		if err := os.Remove(filepath.Join(committed, "parent", "children", filepath.Base(a.indexlink))); err != nil {
+			return err
+		}
+
+		if err := os.Symlink(indexlink, filepath.Join(committed, "parent", "children", hash(name))); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (a *activeDir) mounts(c *cache) ([]containerd.Mount, error) {
@@ -285,7 +368,7 @@ func (a *activeDir) mounts(c *cache) ([]containerd.Mount, error) {
 	}
 	if len(parents) == 0 {
 		// if we only have one layer/no parents then just return a bind mount as overlay
-		// will not work
+		// will not work, readonly always has parent
 		return []containerd.Mount{
 			{
 				Source: filepath.Join(a.path, "fs"),
@@ -297,11 +380,18 @@ func (a *activeDir) mounts(c *cache) ([]containerd.Mount, error) {
 			},
 		}, nil
 	}
-	options := []string{
-		fmt.Sprintf("workdir=%s", filepath.Join(a.path, "work")),
-		fmt.Sprintf("upperdir=%s", filepath.Join(a.path, "fs")),
-		fmt.Sprintf("lowerdir=%s", strings.Join(parents, ":")),
+	var options []string
+
+	if _, err := os.Stat(filepath.Join(a.path, "fs")); err == nil {
+		options = append(options,
+			fmt.Sprintf("workdir=%s", filepath.Join(a.path, "work")),
+			fmt.Sprintf("upperdir=%s", filepath.Join(a.path, "fs")),
+		)
+	} else if !os.IsNotExist(err) {
+		return nil, err
 	}
+
+	options = append(options, fmt.Sprintf("lowerdir=%s", strings.Join(parents, ":")))
 	return []containerd.Mount{
 		{
 			Type:    "overlay",

@@ -175,7 +175,8 @@ type Snapshotter interface {
 
 	// View behaves identically to Prepare except the result may not be
 	// committed back to the snapshot snapshotter. View returns a readonly view on
-	// the parent, with the active snapshot being tracked by the given key.
+	// the parent, with the active snapshot being tracked by the given key. The
+	// parent value is required and will return an error if empty.
 	//
 	// This method operates identically to Prepare, except that Mounts returned
 	// may have the readonly flag set. Any modifications to the underlying

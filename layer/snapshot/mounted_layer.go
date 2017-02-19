@@ -54,14 +54,14 @@ func (ml *mountedLayer) TarStream() (r io.ReadCloser, err error) {
 
 	parent := ml.initName
 	if parent == "" && ml.parent != nil {
-		parent = ml.parent.chainID.String()
+		parent = ml.parent.snapshotName()
 	}
 	if parent != "" {
 		parentKey = filepath.Join(td, "parent")
 		if err := os.Mkdir(parentKey, 0700); err != nil {
 			return nil, errors.Wrap(err, "failed to make parent directory")
 		}
-		parentMounts, err = ml.layerStore.snapshotter.View(parentKey, ml.initName)
+		parentMounts, err = ml.layerStore.snapshotter.View(parentKey, parent)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to prepare parent directory")
 		}

@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package dockerfile.v1;
+
+import "gogoproto/gogo.proto";
+
+service DockerfileService {
+	rpc SendContext(stream ContextRequest) returns (ContextResponse);
+}
+
+message ContextRequest {
+	string session = 1 [(gogoproto.customname) = "SessionID"];
+	bytes tarContent = 2;
+}
+
+message ContextResponse {}
+

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -252,33 +251,10 @@ func (br *buildRouter) postBuildAttach(ctx context.Context, w http.ResponseWrite
 	s := http2.Server{}
 	co := &http2.ServeConnOpts{
 		// Attach grpc server
-		Handler: th{ctx, br},
+		Handler: br.backend.BuildServer(ctx),
 	}
 
 	go s.ServeConn(conn, co)
 
 	return nil
-}
-
-type th struct {
-	ctx context.Context
-	br  *buildRouter
-}
-
-func (t th) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	sessionID := r.FormValue("session")
-
-	logrus.Debugf("Handling http2 call: %#v", r)
-
-	if err := t.br.backend.AttachSession(t.ctx, nopwriter{r.Body}, sessionID); err != nil {
-		http.Error(rw, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-type nopwriter struct {
-	io.ReadCloser
-}
-
-func (nopwriter) Write([]byte) (int, error) {
-	return 0, errors.New("cannot write back")
 }

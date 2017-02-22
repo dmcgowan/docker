@@ -4,15 +4,20 @@ import (
 	"bufio"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
+
+	"google.golang.org/grpc"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
 
+	"github.com/docker/docker/builder/dockerfile/api"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/stringid"
 )
@@ -29,14 +34,16 @@ func (cli *Client) ImageBuildSync(ctx context.Context, dir string, rewrites map[
 		"session": []string{sessionID},
 	}
 
-	hc, err := cli.http2Client(ctx, "/build-attach", query, nil)
+	cc, err := cli.grpcClient(ctx, "/build-attach", query, nil)
 	if err != nil {
 		return "", err
 	}
 
-	cli2 := &Client{}
-	*cli2 = *cli
-	cli2.client = &hc
+	client := api.NewDockerfileServiceClient(cc)
+	contextClient, err := client.SendContext(ctx)
+	if err != nil {
+		return "", err
+	}
 
 	//// TODO: Use translater?
 	var excludes []string
@@ -50,7 +57,27 @@ func (cli *Client) ImageBuildSync(ctx context.Context, dir string, rewrites map[
 		ExcludePatterns: excludes,
 	})
 
-	_, err = cli2.postRaw(ctx, "/send-content", query, a, nil)
+	buf := make([]byte, 1<<15)
+	req := &api.ContextRequest{
+		SessionID: sessionID,
+	}
+
+	for {
+		n, err := a.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return "", err
+		}
+		req.TarContent = buf[:n]
+		if err := contextClient.Send(req); err != nil {
+			return "", err
+		}
+		req.SessionID = ""
+	}
+
+	_, err = contextClient.CloseAndRecv()
 	if err != nil {
 		return "", err
 	}
@@ -58,13 +85,48 @@ func (cli *Client) ImageBuildSync(ctx context.Context, dir string, rewrites map[
 	return sessionID, nil
 }
 
+// grpcClient returns a grpc client using the provided options for
+// establishing an upgraded connection to the grpc server.
+func (cli *Client) grpcClient(ctx context.Context, path string, query url.Values, headers map[string][]string) (*grpc.ClientConn, error) {
+	dialer, err := cli.http2Dialer(ctx, path, query, headers)
+	if err != nil {
+		return nil, err
+	}
+
+	dialOpt := grpc.WithDialer(func(addr string, d time.Duration) (net.Conn, error) {
+		// TODO: verify addr
+		// TODO: handle duration
+		return dialer()
+	})
+
+	return grpc.DialContext(ctx, "", dialOpt, grpc.WithInsecure())
+}
+
 // http2Client returns an http client which uses HTTP2 by sending
 // an upgrade request to given PATH to create HTTP2 connections.
 func (cli *Client) http2Client(ctx context.Context, path string, query url.Values, headers map[string][]string) (http.Client, error) {
+	dialer, err := cli.http2Dialer(ctx, path, query, headers)
+	if err != nil {
+		return http.Client{}, err
+	}
+
+	return http.Client{
+		Transport: &http2.Transport{
+			AllowHTTP: true,
+			DialTLS: func(netw, addr string, cfg *tls.Config) (net.Conn, error) {
+				return dialer()
+			},
+		},
+	}, nil
+}
+
+// http2Client returns a dialer which uses HTTP2 by sending
+// an upgrade request to given PATH to create HTTP2 connections.
+func (cli *Client) http2Dialer(ctx context.Context, path string, query url.Values, headers map[string][]string) (func() (net.Conn, error), error) {
 	apiPath := cli.getAPIPath(path, query)
 	req, err := http.NewRequest("POST", apiPath, nil)
 	if err != nil {
-		return http.Client{}, err
+		return nil, err
 	}
 	req = cli.addHeaders(req, headers)
 
@@ -72,43 +134,36 @@ func (cli *Client) http2Client(ctx context.Context, path string, query url.Value
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "h2c")
 
-	return http.Client{
-		Transport: &http2.Transport{
-			AllowHTTP: true,
-			DialTLS: func(netw, addr string, cfg *tls.Config) (net.Conn, error) {
-				// TODO: ensure valid address
+	return func() (net.Conn, error) {
+		conn, err := dial(cli.proto, cli.addr, resolveTLSConfig(cli.client.Transport))
+		if err != nil {
+			if strings.Contains(err.Error(), "connection refused") {
+				return nil, fmt.Errorf("cannot connect to the Docker daemon. Is 'docker daemon' running on this host?")
+			}
+			return nil, err
+		}
 
-				conn, err := dial(cli.proto, cli.addr, resolveTLSConfig(cli.client.Transport))
-				if err != nil {
-					if strings.Contains(err.Error(), "connection refused") {
-						return nil, fmt.Errorf("cannot connect to the Docker daemon. Is 'docker daemon' running on this host?")
-					}
-					return nil, err
-				}
+		clientconn := httputil.NewClientConn(conn, nil)
+		defer clientconn.Close()
 
-				clientconn := httputil.NewClientConn(conn, nil)
-				defer clientconn.Close()
+		// Server hijacks the connection, error 'connection closed' expected
+		resp, err := clientconn.Do(req)
+		if resp.StatusCode != http.StatusSwitchingProtocols {
+			return nil, fmt.Errorf("unable to upgrade to HTTP2")
+		}
+		if err != nil {
+			return nil, err
+		}
 
-				// Server hijacks the connection, error 'connection closed' expected
-				resp, err := clientconn.Do(req)
-				if resp.StatusCode != http.StatusSwitchingProtocols {
-					return nil, fmt.Errorf("unable to upgrade to HTTP2")
-				}
-				if err != nil {
-					return nil, err
-				}
+		c, br := clientconn.Hijack()
+		if br.Buffered() > 0 {
+			// If there is buffered content, wrap the connection
+			c = &hijackedConn{c, br}
+		} else {
+			br.Reset(nil)
+		}
 
-				c, br := clientconn.Hijack()
-				if br.Buffered() > 0 {
-					// If there is buffered content, wrap the connection
-					c = &hijackedConn{c, br}
-				} else {
-					br.Reset(nil)
-				}
-
-				return c, nil
-			},
-		},
+		return c, nil
 	}, nil
 }
 

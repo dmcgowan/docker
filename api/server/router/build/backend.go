@@ -2,6 +2,7 @@ package build
 
 import (
 	"io"
+	"net/http"
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/backend"
@@ -18,7 +19,6 @@ type Backend interface {
 	// TODO: make this return a reference instead of string
 	BuildFromContext(ctx context.Context, src io.ReadCloser, remote string, buildOptions *types.ImageBuildOptions, pg backend.ProgressWriter) (string, error)
 
-	// AttachSession starts a sync session on the provided stream using the given
-	// sessionID.
-	AttachSession(ctx context.Context, src io.ReadWriteCloser, sessionID string) error
+	// BuildServer returns an http Handler which serves the build GRPC server
+	BuildServer(ctx context.Context) http.Handler
 }

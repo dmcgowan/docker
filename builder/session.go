@@ -19,13 +19,13 @@ var (
 
 // AttachSession attaches the given stream to a build sync
 // referenced by the given session id
-func AttachSession(rw io.ReadWriteCloser, sessionID string) error {
+func AttachSession(r io.Reader, sessionID string) error {
 	if sessionID == "" {
 		sessionID = stringid.GenerateRandomID()
 	}
 	// TODO: else lookup existing sessionID
 
-	return startSessionContext(sessionID, rw)
+	return startSessionContext(sessionID, r)
 }
 
 func makeSessionContext(sessionID string) (ModifiableContext, error) {
@@ -93,7 +93,7 @@ func (c *sessionContext) Remove(path string) error {
 	return c.context.Remove(path)
 }
 
-func startSessionContext(sessionID string, stream io.ReadWriteCloser) error {
+func startSessionContext(sessionID string, stream io.Reader) error {
 	// TODO: Use sync protocol
 	// TODO: 1) Use rsync
 	// TODO: 2) Use continuity to first read continuity manifest

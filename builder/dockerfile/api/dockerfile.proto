@@ -5,13 +5,20 @@ package dockerfile.v1;
 import "gogoproto/gogo.proto";
 
 service DockerfileService {
-	rpc SendContext(stream ContextRequest) returns (ContextResponse);
+	rpc StartContext(stream TransferResponse) returns (stream TransferRequest);
 }
 
-message ContextRequest {
-	string session = 1 [(gogoproto.customname) = "SessionID"];
-	bytes tarContent = 2;
+message TransferRequest {
+	repeated string protocol = 1;
+	repeated string source = 2;
 }
 
-message ContextResponse {}
+message TransferResponse {
+	string protocol = 1;
+}
+
+message TarContent{
+	bytes content = 1;
+}
+
 

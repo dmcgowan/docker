@@ -3,6 +3,7 @@ package client
 import (
 	"bufio"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"golang.org/x/net/context"
 	"golang.org/x/net/http2"
@@ -40,8 +42,23 @@ func (cli *Client) ImageBuildSync(ctx context.Context, dir string, rewrites map[
 	}
 
 	client := api.NewDockerfileServiceClient(cc)
-	contextClient, err := client.SendContext(ctx)
+
+	ctx = metadata.NewContext(ctx, metadata.Pairs("session", sessionID))
+	contextClient, err := client.StartContext(ctx)
 	if err != nil {
+		return "", err
+	}
+	defer contextClient.CloseSend()
+
+	tr, err := contextClient.Recv()
+	if err != nil {
+		return "", err
+	}
+	if len(tr.Protocol) == 0 || tr.Protocol[0] != "tarstream" {
+		return "", errors.New("unexpected protocol from server")
+	}
+
+	if err := contextClient.Send(&api.TransferResponse{Protocol: "tarstream"}); err != nil {
 		return "", err
 	}
 
@@ -58,10 +75,7 @@ func (cli *Client) ImageBuildSync(ctx context.Context, dir string, rewrites map[
 	})
 
 	buf := make([]byte, 1<<15)
-	req := &api.ContextRequest{
-		SessionID: sessionID,
-	}
-
+	t := new(api.TarContent)
 	for {
 		n, err := a.Read(buf)
 		if err != nil {
@@ -70,16 +84,11 @@ func (cli *Client) ImageBuildSync(ctx context.Context, dir string, rewrites map[
 			}
 			return "", err
 		}
-		req.TarContent = buf[:n]
-		if err := contextClient.Send(req); err != nil {
+		t.Content = buf[:n]
+
+		if err := contextClient.SendMsg(t); err != nil {
 			return "", err
 		}
-		req.SessionID = ""
-	}
-
-	_, err = contextClient.CloseAndRecv()
-	if err != nil {
-		return "", err
 	}
 
 	return sessionID, nil

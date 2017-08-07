@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/manifest/schema2"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/distribution"
@@ -30,6 +29,7 @@ import (
 	"github.com/docker/docker/reference"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 

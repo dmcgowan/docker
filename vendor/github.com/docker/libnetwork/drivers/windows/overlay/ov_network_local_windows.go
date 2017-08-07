@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/Microsoft/hcsshim"
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/datastore"
+	"github.com/sirupsen/logrus"
 )
 
 const overlayNetworkPrefix = "overlay/network"

@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/pkg/discovery"
 	"github.com/docker/docker/pkg/plugingetter"
 	"github.com/docker/go-connections/tlsconfig"
@@ -15,6 +14,7 @@ import (
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/netlabel"
 	"github.com/docker/libnetwork/osl"
+	"github.com/sirupsen/logrus"
 )
 
 // restrictedNameRegex represents the regular expression which regulates the allowed network or endpoint names.

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/go/canonical/json"
 	"github.com/docker/notary"
+	"github.com/sirupsen/logrus"
 )
 
 // SigAlgorithm for types of signatures

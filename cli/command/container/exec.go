@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/cli/command"
 	apiclient "github.com/docker/docker/client"
 	options "github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/promise"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"golang.org/x/net/context"
 )

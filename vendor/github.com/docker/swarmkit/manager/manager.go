@@ -12,7 +12,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/go-events"
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/ca"
@@ -36,6 +35,7 @@ import (
 	"github.com/docker/swarmkit/remotes"
 	"github.com/docker/swarmkit/xnet"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 )

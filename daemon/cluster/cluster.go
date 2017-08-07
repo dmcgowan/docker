@@ -51,7 +51,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	distreference "github.com/docker/distribution/reference"
 	apierrors "github.com/docker/docker/api/errors"
 	apitypes "github.com/docker/docker/api/types"
@@ -74,6 +73,7 @@ import (
 	"github.com/docker/swarmkit/protobuf/ptypes"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 

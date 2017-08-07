@@ -9,7 +9,6 @@ import (
 	"path"
 	"sort"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/cli/command"
 	"github.com/docker/docker/cli/trust"
@@ -19,6 +18,7 @@ import (
 	"github.com/docker/notary/client"
 	"github.com/docker/notary/tuf/data"
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/net/context"
 )
 

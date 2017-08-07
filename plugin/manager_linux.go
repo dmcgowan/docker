@@ -10,7 +10,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/daemon/initlayer"
 	"github.com/docker/docker/libcontainerd"
@@ -21,6 +20,7 @@ import (
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 func (pm *Manager) enable(p *v2.Plugin, c *controller, force bool) error {

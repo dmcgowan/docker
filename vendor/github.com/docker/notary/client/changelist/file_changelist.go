@@ -8,8 +8,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/uuid"
+	"github.com/sirupsen/logrus"
 	"path/filepath"
 )
 

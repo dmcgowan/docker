@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	cfconfig "github.com/cloudflare/cfssl/config"
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/identity"
@@ -21,6 +20,7 @@ import (
 	"github.com/docker/swarmkit/remotes"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/credentials"
 
 	"golang.org/x/net/context"

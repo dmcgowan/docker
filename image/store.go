@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution/digestset"
 	"github.com/docker/docker/layer"
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
 )
 
 // Store is an interface for creating and accessing images

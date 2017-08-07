@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/notary/tuf/data"
 	"github.com/docker/notary/tuf/signed"
 	"github.com/docker/notary/tuf/utils"
+	"github.com/sirupsen/logrus"
 )
 
 // ErrValidationFail is returned when there is no valid trusted certificates

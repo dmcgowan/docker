@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/distribution"
 	"github.com/docker/docker/image"
 	"github.com/docker/docker/image/v1"
@@ -23,6 +22,7 @@ import (
 	"github.com/docker/docker/pkg/system"
 	"github.com/docker/docker/reference"
 	"github.com/opencontainers/go-digest"
+	"github.com/sirupsen/logrus"
 )
 
 func (l *tarexporter) Load(inTar io.ReadCloser, outStream io.Writer, quiet bool) error {

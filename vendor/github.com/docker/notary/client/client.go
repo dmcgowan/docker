@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/notary"
 	"github.com/docker/notary/client/changelist"
 	"github.com/docker/notary/cryptoservice"
@@ -23,6 +22,7 @@ import (
 	"github.com/docker/notary/tuf/data"
 	"github.com/docker/notary/tuf/signed"
 	"github.com/docker/notary/tuf/utils"
+	"github.com/sirupsen/logrus"
 )
 
 func init() {

@@ -3,12 +3,12 @@ package client
 import (
 	"encoding/json"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/notary"
 	store "github.com/docker/notary/storage"
 	"github.com/docker/notary/tuf"
 	"github.com/docker/notary/tuf/data"
 	"github.com/docker/notary/tuf/signed"
+	"github.com/sirupsen/logrus"
 )
 
 // TUFClient is a usability wrapper around a raw TUF repo

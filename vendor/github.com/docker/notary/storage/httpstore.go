@@ -22,9 +22,9 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/notary"
 	"github.com/docker/notary/tuf/validation"
+	"github.com/sirupsen/logrus"
 )
 
 // ErrServerUnavailable indicates an error from the server. code allows us to

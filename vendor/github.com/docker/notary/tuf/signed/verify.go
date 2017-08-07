@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/go/canonical/json"
 	"github.com/docker/notary/tuf/data"
+	"github.com/sirupsen/logrus"
 )
 
 // Various basic signing errors

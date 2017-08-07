@@ -8,7 +8,6 @@ import (
 
 	"golang.org/x/net/context"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/errors"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/strslice"
@@ -18,6 +17,7 @@ import (
 	"github.com/docker/docker/pkg/pools"
 	"github.com/docker/docker/pkg/signal"
 	"github.com/docker/docker/pkg/term"
+	"github.com/sirupsen/logrus"
 )
 
 // Seconds to wait after sending TERM before trying KILL

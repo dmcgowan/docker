@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/iptables"
+	"github.com/sirupsen/logrus"
 )
 
 // DockerChain: DOCKER iptable chain name

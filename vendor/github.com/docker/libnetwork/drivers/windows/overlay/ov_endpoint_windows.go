@@ -6,10 +6,10 @@ import (
 	"net"
 
 	"github.com/Microsoft/hcsshim"
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/libnetwork/datastore"
 	"github.com/docker/libnetwork/driverapi"
 	"github.com/docker/libnetwork/types"
+	"github.com/sirupsen/logrus"
 )
 
 type endpointTable map[string]*endpoint

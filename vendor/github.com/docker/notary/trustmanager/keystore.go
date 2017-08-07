@@ -7,11 +7,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/notary"
 	store "github.com/docker/notary/storage"
 	"github.com/docker/notary/tuf/data"
 	"github.com/docker/notary/tuf/utils"
+	"github.com/sirupsen/logrus"
 )
 
 type keyInfoMap map[string]KeyInfo

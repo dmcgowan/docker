@@ -262,6 +262,9 @@ func (s *TagStore) pushV2Repository(r *registry.Session, eng *engine.Engine, out
 
 	endpoint, err := r.V2RegistryEndpoint(repoInfo.Index)
 	if err != nil {
+		if err == registry.ErrEndpointNotFound {
+			return err
+		}
 		return fmt.Errorf("error getting registry endpoint: %s", err)
 	}
 	auth, err := r.GetV2Authorization(endpoint, repoInfo.RemoteName, false)
@@ -378,6 +381,12 @@ func (s *TagStore) CmdPush(job *engine.Job) engine.Status {
 	job.GetenvJson("authConfig", authConfig)
 	job.GetenvJson("metaHeaders", &metaHeaders)
 
+	// Set a header so remotes can identify the command being carried out. If
+	// present, the remote may act on the field but this is mostly advisory.
+	metaHeaders["Docker-Command"] = []string{"push"}
+
+	repoInfo.Index.Headers = metaHeaders
+
 	if _, err := s.poolAdd("push", repoInfo.LocalName); err != nil {
 		return job.Error(err)
 	}
@@ -403,9 +412,12 @@ func (s *TagStore) CmdPush(job *engine.Job) engine.Status {
 		if err == nil {
 			return engine.StatusOK
 		}
-
-		// error out, no fallback to V1
-		return job.Error(err)
+		if err != registry.ErrEndpointNotFound {
+			// error out, no fallback to V1
+			return job.Error(err)
+		} else {
+			log.Debugf("Skipping V2 registry: endpoint not available")
+		}
 	}
 
 	if err != nil {

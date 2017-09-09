@@ -22,7 +22,7 @@ func getV2Builder(e *Endpoint) *v2.URLBuilder {
 func (r *Session) V2RegistryEndpoint(index *IndexInfo) (ep *Endpoint, err error) {
 	// TODO check if should use Mirror
 	if index.Official {
-		ep, err = newEndpoint(REGISTRYSERVER, true)
+		ep, err = newEndpoint(REGISTRYSERVER, index.Secure, index.Headers)
 		if err != nil {
 			return
 		}
@@ -221,6 +221,12 @@ func (r *Session) PutV2ImageBlob(ep *Endpoint, imageName, sumType, sumStr string
 	res, _, err := r.doRequest(req)
 	if err != nil {
 		return err
+	}
+	if res.StatusCode != 202 {
+		if res.StatusCode == 401 {
+			return errLoginRequired
+		}
+		return utils.NewHTTPRequestError(fmt.Sprintf("Server error: %d trying to push %s blob", res.StatusCode, imageName), res)
 	}
 	location := res.Header.Get("Location")
 

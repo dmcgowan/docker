@@ -98,6 +98,7 @@ type IndexInfo struct {
 	Mirrors  []string
 	Secure   bool
 	Official bool
+	Headers  map[string][]string
 }
 
 type RepositoryInfo struct {

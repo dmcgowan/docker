@@ -2,6 +2,7 @@ package registry
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -11,10 +12,13 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/registry/v2"
+	"github.com/docker/docker/utils"
 )
 
 // for mocking in unit tests
 var lookupIP = net.LookupIP
+
+var ErrEndpointNotFound = errors.New("endpoint not found")
 
 // scans string for api version in the URL path. returns the trimmed address, if version found, string and API version.
 func scanForAPIVersion(address string) (string, APIVersion) {
@@ -43,7 +47,7 @@ func scanForAPIVersion(address string) (string, APIVersion) {
 // NewEndpoint parses the given address to return a registry endpoint.
 func NewEndpoint(index *IndexInfo) (*Endpoint, error) {
 	// *TODO: Allow per-registry configuration of endpoints.
-	endpoint, err := newEndpoint(index.GetAuthConfigKey(), index.Secure)
+	endpoint, err := newEndpoint(index.GetAuthConfigKey(), index.Secure, index.Headers)
 	if err != nil {
 		return nil, err
 	}
@@ -60,6 +64,9 @@ func validateEndpoint(endpoint *Endpoint) error {
 	// Try HTTPS ping to registry
 	endpoint.URL.Scheme = "https"
 	if _, err := endpoint.Ping(); err != nil {
+		if err == ErrEndpointNotFound {
+			return err
+		}
 		if endpoint.IsSecure {
 			// If registry is secure and HTTPS failed, show user the error and tell them about `--insecure-registry`
 			// in case that's what they need. DO NOT accept unknown CA certificates, and DO NOT fallback to HTTP.
@@ -74,6 +81,9 @@ func validateEndpoint(endpoint *Endpoint) error {
 		if _, err2 = endpoint.Ping(); err2 == nil {
 			return nil
 		}
+		if err2 == ErrEndpointNotFound {
+			return err2
+		}
 
 		return fmt.Errorf("invalid registry endpoint %q. HTTPS attempt: %v. HTTP attempt: %v", endpoint, err, err2)
 	}
@@ -81,7 +91,7 @@ func validateEndpoint(endpoint *Endpoint) error {
 	return nil
 }
 
-func newEndpoint(address string, secure bool) (*Endpoint, error) {
+func newEndpoint(address string, secure bool, headers map[string][]string) (*Endpoint, error) {
 	var (
 		endpoint       = new(Endpoint)
 		trimmedAddress string
@@ -98,6 +108,7 @@ func newEndpoint(address string, secure bool) (*Endpoint, error) {
 		return nil, err
 	}
 	endpoint.IsSecure = secure
+	endpoint.ReqFactory = HTTPRequestFactory(headers)
 	return endpoint, nil
 }
 
@@ -112,6 +123,7 @@ type Endpoint struct {
 	IsSecure       bool
 	AuthChallenges []*AuthorizationChallenge
 	URLBuilder     *v2.URLBuilder
+	ReqFactory     *utils.HTTPRequestFactory
 }
 
 // Get the formated URL for the root of this registry Endpoint
@@ -168,7 +180,7 @@ func (e *Endpoint) pingV1() (RegistryInfo, error) {
 		return RegistryInfo{Standalone: false}, nil
 	}
 
-	req, err := http.NewRequest("GET", e.Path("_ping"), nil)
+	req, err := e.ReqFactory.NewRequest("GET", e.Path("_ping"), nil)
 	if err != nil {
 		return RegistryInfo{Standalone: false}, err
 	}
@@ -216,7 +228,7 @@ func (e *Endpoint) pingV1() (RegistryInfo, error) {
 func (e *Endpoint) pingV2() (RegistryInfo, error) {
 	log.Debugf("attempting v2 ping for registry endpoint %s", e)
 
-	req, err := http.NewRequest("GET", e.Path(""), nil)
+	req, err := e.ReqFactory.NewRequest("GET", e.Path(""), nil)
 	if err != nil {
 		return RegistryInfo{}, err
 	}
@@ -238,6 +250,10 @@ func (e *Endpoint) pingV2() (RegistryInfo, error) {
 		// on this endpoint object.
 		e.AuthChallenges = parseAuthHeader(resp.Header)
 		return RegistryInfo{}, nil
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return RegistryInfo{}, ErrEndpointNotFound
 	}
 
 	return RegistryInfo{}, fmt.Errorf("v2 registry endpoint returned status %d: %q", resp.StatusCode, http.StatusText(resp.StatusCode))

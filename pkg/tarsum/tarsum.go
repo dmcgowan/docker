@@ -160,6 +160,11 @@ func (sth simpleTHash) Hash() hash.Hash { return sth.h() }
 
 func (ts *tarSum) encodeHeader(h *tar.Header) error {
 	for _, elem := range ts.headerSelector.selectHeaders(h) {
+		// Ignore these headers to be compatible with versions
+		// before go 1.10
+		if elem[0] == "gname" || elem[0] == "uname" {
+			elem[1] = ""
+		}
 		if _, err := ts.h.Write([]byte(elem[0] + elem[1])); err != nil {
 			return err
 		}
@@ -219,6 +224,10 @@ func (ts *tarSum) Read(buf []byte) (int, error) {
 				ts.first = false
 			}
 
+			if _, err := ts.tarW.Write(buf2[:n]); err != nil {
+				return 0, err
+			}
+
 			currentHeader, err := ts.tarR.Next()
 			if err != nil {
 				if err == io.EOF {
@@ -236,6 +245,7 @@ func (ts *tarSum) Read(buf []byte) (int, error) {
 				}
 				return n, err
 			}
+
 			ts.currentFile = path.Join(".", path.Join("/", currentHeader.Name))
 			if err := ts.encodeHeader(currentHeader); err != nil {
 				return 0, err
@@ -243,10 +253,7 @@ func (ts *tarSum) Read(buf []byte) (int, error) {
 			if err := ts.tarW.WriteHeader(currentHeader); err != nil {
 				return 0, err
 			}
-			if _, err := ts.tarW.Write(buf2[:n]); err != nil {
-				return 0, err
-			}
-			ts.tarW.Flush()
+
 			if _, err := io.Copy(ts.writer, ts.bufTar); err != nil {
 				return 0, err
 			}
@@ -266,7 +273,6 @@ func (ts *tarSum) Read(buf []byte) (int, error) {
 	if _, err = ts.tarW.Write(buf2[:n]); err != nil {
 		return 0, err
 	}
-	ts.tarW.Flush()
 
 	// Filling the output writer
 	if _, err = io.Copy(ts.writer, ts.bufTar); err != nil {

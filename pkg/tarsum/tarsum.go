@@ -246,7 +246,9 @@ func (ts *tarSum) Read(buf []byte) (int, error) {
 			if _, err := ts.tarW.Write(buf2[:n]); err != nil {
 				return 0, err
 			}
-			ts.tarW.Flush()
+			if err := ts.tarW.Flush(); err != nil {
+				return 0, err
+			}
 			if _, err := io.Copy(ts.writer, ts.bufTar); err != nil {
 				return 0, err
 			}
@@ -266,7 +268,9 @@ func (ts *tarSum) Read(buf []byte) (int, error) {
 	if _, err = ts.tarW.Write(buf2[:n]); err != nil {
 		return 0, err
 	}
-	ts.tarW.Flush()
+	if err := ts.tarW.Flush(); err != nil {
+		return 0, err
+	}
 
 	// Filling the output writer
 	if _, err = io.Copy(ts.writer, ts.bufTar); err != nil {

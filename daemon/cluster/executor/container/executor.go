@@ -47,7 +47,7 @@ func NewExecutor(b executorpkg.Backend, p plugin.Backend, i executorpkg.ImageBac
 
 // Describe returns the underlying node description from the docker client.
 func (e *executor) Describe(ctx context.Context) (*api.NodeDescription, error) {
-	info, err := e.backend.SystemInfo()
+	info, err := e.backend.SystemInfo(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +229,12 @@ func (e *executor) Controller(t *api.Task) (exec.Controller, error) {
 		}
 		switch runtimeKind {
 		case string(swarmtypes.RuntimePlugin):
-			info, _ := e.backend.SystemInfo()
+			// TODO(containerd): This interface should be reduced as
+			// full system info is not needed for a single check
+			info, err := e.backend.SystemInfo(context.TODO())
+			if err != nil {
+				return ctlr, err
+			}
 			if !info.ExperimentalBuild {
 				return ctlr, fmt.Errorf("runtime type %q only supported in experimental", swarmtypes.RuntimePlugin)
 			}

@@ -28,7 +28,7 @@ func (m *MockBackend) ContainerAttachRaw(cID string, stdin io.ReadCloser, stdout
 	return nil
 }
 
-func (m *MockBackend) ContainerCreate(config types.ContainerCreateConfig) (container.ContainerCreateCreatedBody, error) {
+func (m *MockBackend) ContainerCreate(ctx context.Context, config types.ContainerCreateConfig) (container.ContainerCreateCreatedBody, error) {
 	if m.containerCreateFunc != nil {
 		return m.containerCreateFunc(config)
 	}

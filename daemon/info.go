@@ -1,6 +1,7 @@
 package daemon // import "github.com/docker/docker/daemon"
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"os"
@@ -26,11 +27,15 @@ import (
 )
 
 // SystemInfo returns information about the host server the daemon is running on.
-func (daemon *Daemon) SystemInfo() (*types.Info, error) {
+func (daemon *Daemon) SystemInfo(ctx context.Context) (*types.Info, error) {
 	defer metrics.StartTimer(hostInfoFunctions.WithValues("system_info"))()
 
 	sysInfo := sysinfo.New(true)
 	cRunning, cPaused, cStopped := stateCtr.get()
+	count, err := daemon.imageService.CountImages(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	v := &types.Info{
 		ID:                 daemon.ID,
@@ -38,7 +43,7 @@ func (daemon *Daemon) SystemInfo() (*types.Info, error) {
 		ContainersRunning:  cRunning,
 		ContainersPaused:   cPaused,
 		ContainersStopped:  cStopped,
-		Images:             daemon.imageService.CountImages(),
+		Images:             count,
 		IPv4Forwarding:     !sysInfo.IPv4ForwardingDisabled,
 		BridgeNfIptables:   !sysInfo.BridgeNFCallIPTablesDisabled,
 		BridgeNfIP6tables:  !sysInfo.BridgeNFCallIP6TablesDisabled,

@@ -921,6 +921,13 @@ func NewDaemon(ctx context.Context, config *config.Config, pluginStore *plugin.S
 		} else {
 			logrus.Infof("Setting the storage driver from the $DOCKER_DRIVER environment variable (%s)", driverName)
 		}
+
+		wp := ocispec.Platform{
+			Architecture: "wasm",
+			OS:           "wasi",
+		}
+		storageDrivers = append(storageDrivers, storageDriver{wp, driverName})
+
 		storageDrivers = append(storageDrivers, storageDriver{platforms.DefaultSpec(), driverName})
 
 		// TODO(containerd): probe system for additional configured graph drivers

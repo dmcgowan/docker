@@ -41,11 +41,7 @@ func (i *ImageService) ExportImage(ctx context.Context, names []string, w io.Wri
 	}
 
 	for _, img := range images {
-		if len(img.names) > 0 {
-			opts = append(opts, archive.WithNamedManifest(img.target, img.names...))
-		} else {
-			opts = append(opts, archive.WithManifest(img.target))
-		}
+		opts = append(opts, archive.WithManifest(img.target, img.names...))
 	}
 
 	// Add each manifest

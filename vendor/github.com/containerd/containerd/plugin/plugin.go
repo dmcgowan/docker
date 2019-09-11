@@ -184,7 +184,7 @@ func Graph(disableList []string) (ordered []*Registration) {
 	defer register.RUnlock()
 	for _, d := range disableList {
 		for i, r := range register.r {
-			if r.ID == d {
+			if r.ID == d || r.URI() == d {
 				register.r = append(register.r[:i], register.r[i+1:]...)
 				break
 			}

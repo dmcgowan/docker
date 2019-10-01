@@ -81,11 +81,7 @@ func (s *imageRouter) postImagesCreate(ctx context.Context, w http.ResponseWrite
 		// 'err' MUST NOT be defined within this block, we need any error
 		// generated from the download to be available to the output
 		// stream processing below
-		os := ""
-		if platform != nil {
-			os = platform.OS
-		}
-		err = s.backend.ImportImage(ctx, src, repo, os, tag, message, r.Body, output, r.Form["changes"])
+		err = s.backend.ImportImage(ctx, src, repo, tag, platform, message, r.Body, output, r.Form["changes"])
 	}
 	if err != nil {
 		if !output.Flushed() {

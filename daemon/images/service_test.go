@@ -94,7 +94,7 @@ func containerdServiceOpt(ctx context.Context, root string) (containerd.ClientOp
 
 		// load the plugin specific configuration if it is provided
 		if p.Config != nil {
-			pluginConfig, err := config.Decode(p.ID, p.Config)
+			pluginConfig, err := config.Decode(p)
 			if err != nil {
 				return nil, err
 			}

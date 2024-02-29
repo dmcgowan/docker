@@ -26,6 +26,7 @@ import (
 	"github.com/cloudflare/cfssl/helpers"
 	"github.com/creack/pty"
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/client"
 	"github.com/docker/docker/integration-cli/checker"
 	"github.com/docker/docker/integration-cli/cli"
 	"github.com/docker/docker/integration-cli/cli/build"
@@ -2745,4 +2746,66 @@ func (s *DockerDaemonSuite) TestFailedPluginRemove(c *testing.T) {
 	_, _, err = apiClient.PluginInspectWithRaw(ctx, name)
 	// plugin should be gone since the config.json is gone
 	assert.ErrorContains(c, err, "")
+}
+
+func (s *DockerDaemonSuite) TestMigrateSnapshotter(c *testing.T) {
+	s.d.StartWithBusybox(testutil.GetContext(c), c)
+	defer s.d.Restart(c)
+
+	apiClient, err := client.NewClientWithOpts(client.FromEnv)
+	assert.NilError(c, err)
+	defer apiClient.Close()
+	info, err := apiClient.Info(testutil.GetContext(c))
+	assert.NilError(c, err)
+
+	driver := info.Driver
+	c.Log(info.Driver)
+
+	cli.Docker(
+		cli.Args("run", "-d", "--name", "top", "-p", "80", "busybox:latest", "top"),
+		cli.Daemon(s.d),
+	).Assert(c, icmd.Success)
+	/*
+			cli.Docker(
+				cli.Args("run", "-d", "--name", "top1", "-p", "1234:80", "--restart", "always", "busybox:latest", "top"),
+				cli.Daemon(s.d),
+			).Assert(c, icmd.Success)
+
+		cli.Docker(
+			cli.Args("run", "-d", "--name", "top2", "-p", "80", "busybox:latest", "top"),
+			cli.Daemon(s.d),
+		).Assert(c, icmd.Success)
+
+		testRun := func(m map[string]bool, prefix string) {
+			var format string
+			for cont, shouldRun := range m {
+				out := cli.Docker(cli.Args("ps"), cli.Daemon(s.d)).Assert(c, icmd.Success).Combined()
+				if shouldRun {
+					format = "%scontainer %q is not running"
+				} else {
+					format = "%scontainer %q is running"
+				}
+				if shouldRun != strings.Contains(out, cont) {
+					c.Fatalf(format, prefix, cont)
+				}
+			}
+		}
+	*/
+
+	//testRun(map[string]bool{"top1": true, "top2": true}, "")
+
+	s.d.Restart(c, "--feature", "containerd-migration")
+
+	info, err = apiClient.Info(testutil.GetContext(c))
+	assert.NilError(c, err)
+
+	c.Log(info.Driver)
+	assert.Assert(c, driver != info.Driver, "expected driver to migrate from %s to containerd snapshotter", driver)
+
+	//testRun(map[string]bool{"top1": true, "top2": false}, "After daemon restart: ")
+
+	cli.Docker(
+		cli.Args("run", "-d", "--name", "top", "-p", "80", "busybox:latest", "top"),
+		cli.Daemon(s.d),
+	).Assert(c, icmd.Success)
 }

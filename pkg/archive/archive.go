@@ -26,6 +26,8 @@ import (
 
 	"github.com/containerd/log"
 	"github.com/docker/docker/pkg/idtools"
+
+	//"github.com/docker/docker/pkg/pools"
 	"github.com/klauspost/compress/zstd"
 	"github.com/moby/patternmatcher"
 	"github.com/moby/sys/sequential"
@@ -75,6 +77,11 @@ type (
 		// were probably in the archive for a reason, so set this option at
 		// your own peril.
 		BestEffortXattrs bool
+		// Writer is used to directly write the tar content, when used
+		// calls to Reader will return nil
+		Writer io.Writer
+		// Called when completed, if provided.
+		Done func(error) error
 	}
 )
 
@@ -347,15 +354,21 @@ func DecompressStream(archive io.Reader) (io.ReadCloser, error) {
 
 type nopWriteCloser struct {
 	io.Writer
+	w *bufio.Writer
 }
 
-func (nopWriteCloser) Close() error { return nil }
+func (w nopWriteCloser) Close() error { return w.w.Flush() }
 
 // CompressStream compresses the dest with specified compression algorithm.
 func CompressStream(dest io.Writer, compression Compression) (io.WriteCloser, error) {
 	switch compression {
 	case Uncompressed:
-		return nopWriteCloser{dest}, nil
+		//p := pools.BufioWriter32KPool
+		//buf := p.Get(dest)
+		//return p.NewWriteCloserWrapper(buf, buf), nil
+		//return writeBufWrapper, nil
+		//buf := bufio.NewWriterSize(dest, 32*1024)
+		return nopWriteCloser{dest, nil}, nil
 	case Gzip:
 		return gzip.NewWriter(dest), nil
 	case Bzip2, Xz:
@@ -904,10 +917,10 @@ type Tarballer struct {
 	srcPath           string
 	options           *TarOptions
 	pm                *patternmatcher.PatternMatcher
-	pipeReader        *io.PipeReader
-	pipeWriter        *io.PipeWriter
+	reader            io.ReadCloser
 	compressWriter    io.WriteCloser
 	whiteoutConverter tarWhiteoutConverter
+	done              func(error) error
 }
 
 // NewTarballer constructs a new tarballer. The arguments are the same as for
@@ -918,9 +931,29 @@ func NewTarballer(srcPath string, options *TarOptions) (*Tarballer, error) {
 		return nil, err
 	}
 
-	pipeReader, pipeWriter := io.Pipe()
+	var (
+		writer = options.Writer
+		reader io.ReadCloser
+		done   func(error) error
+	)
+	if writer == nil {
+		pipeReader, pipeWriter := io.Pipe()
+		writer = pipeWriter
+		reader = pipeReader
+		if options.Done == nil {
+			done = pipeWriter.CloseWithError
+		} else {
+			done = func(e error) error {
+				e1 := pipeWriter.CloseWithError(err)
+				e2 := options.Done(err)
+				return errors.Join(e1, e2)
+			}
+		}
+	} else {
+		done = options.Done
+	}
 
-	compressWriter, err := CompressStream(pipeWriter, options.Compression)
+	compressWriter, err := CompressStream(writer, options.Compression)
 	if err != nil {
 		return nil, err
 	}
@@ -931,16 +964,16 @@ func NewTarballer(srcPath string, options *TarOptions) (*Tarballer, error) {
 		srcPath:           addLongPathPrefix(srcPath),
 		options:           options,
 		pm:                pm,
-		pipeReader:        pipeReader,
-		pipeWriter:        pipeWriter,
+		reader:            reader,
 		compressWriter:    compressWriter,
 		whiteoutConverter: getWhiteoutConverter(options.WhiteoutFormat),
+		done:              done,
 	}, nil
 }
 
 // Reader returns the reader for the created archive.
 func (t *Tarballer) Reader() io.ReadCloser {
-	return t.pipeReader
+	return t.reader
 }
 
 // Do performs the archiving operation in the background. The resulting archive
@@ -962,8 +995,11 @@ func (t *Tarballer) Do() {
 		if err := t.compressWriter.Close(); err != nil {
 			log.G(context.TODO()).Errorf("Can't close compress writer: %s", err)
 		}
-		if err := t.pipeWriter.Close(); err != nil {
-			log.G(context.TODO()).Errorf("Can't close pipe writer: %s", err)
+		if t.done != nil {
+			// TODO: Consider passing in errors
+			if err := t.done(nil); err != nil {
+				log.G(context.TODO()).Errorf("Can't close pipe or complete callback: %s", err)
+			}
 		}
 	}()
 

@@ -44,17 +44,26 @@ func (daemon *Daemon) ContainerExport(ctx context.Context, name string, out io.W
 
 func (daemon *Daemon) containerExport(ctx context.Context, container *container.Container, out io.Writer) error {
 	err := daemon.imageService.PerformWithBaseFS(ctx, container, func(basefs string) error {
-		archv, err := chrootarchive.Tar(basefs, &archive.TarOptions{
+		done := make(chan error)
+		_, err := chrootarchive.Tar(basefs, &archive.TarOptions{
 			Compression: archive.Uncompressed,
 			IDMap:       daemon.idMapping,
+			Writer:      out,
+			Done: func(e error) error {
+				if e != nil {
+					done <- e
+				}
+				close(done)
+
+				return nil
+			},
 		}, basefs)
 		if err != nil {
 			return err
 		}
 
-		// Stream the entire contents of the container (basically a volatile snapshot)
-		_, err = io.Copy(out, archv)
-		return err
+		return <-done
+
 	})
 	if err != nil {
 		return err

@@ -51,6 +51,12 @@ func MkdirAllAndChownNew(path string, mode os.FileMode, owner Identity) error {
 //
 // Deprecated: use [(user.IdentityMapping).RootPair] instead.
 func GetRootUIDGID(uidMap, gidMap []IDMap) (int, int, error) {
+	return getRootUIDGID(uidMap, gidMap)
+}
+
+// getRootUIDGID retrieves the remapped root uid/gid pair from the set of maps.
+// If the maps are empty, then the root uid/gid will default to "real" 0/0
+func getRootUIDGID(uidMap, gidMap []IDMap) (int, int, error) {
 	uid, err := toHost(0, uidMap)
 	if err != nil {
 		return -1, -1, err
@@ -142,7 +148,7 @@ func fromUserIDMap(u []user.IDMap) []IDMap {
 // because a root user always exists, and the defaults are correct when the uid
 // and gid maps are empty.
 func (i IdentityMapping) RootPair() Identity {
-	uid, gid, _ := GetRootUIDGID(i.UIDMaps, i.GIDMaps)
+	uid, gid, _ := getRootUIDGID(i.UIDMaps, i.GIDMaps)
 	return Identity{UID: uid, GID: gid}
 }
 

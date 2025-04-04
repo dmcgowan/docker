@@ -334,7 +334,7 @@ func TestGetRootUIDGID(t *testing.T) {
 		},
 	}
 
-	uid, gid, err := GetRootUIDGID(uidMap, gidMap)
+	uid, gid, err := getRootUIDGID(uidMap, gidMap)
 	assert.Check(t, err)
 	assert.Check(t, is.Equal(os.Geteuid(), uid))
 	assert.Check(t, is.Equal(os.Getegid(), gid))
@@ -346,7 +346,7 @@ func TestGetRootUIDGID(t *testing.T) {
 			Size:        1,
 		},
 	}
-	_, _, err = GetRootUIDGID(uidMapError, gidMap)
+	_, _, err = getRootUIDGID(uidMapError, gidMap)
 	assert.Check(t, is.Error(err, "Container ID 0 cannot be mapped to a host ID"))
 }
 

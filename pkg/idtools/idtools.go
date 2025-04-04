@@ -11,7 +11,7 @@ import (
 // of IDMap entries represents the structure that will be provided to the Linux
 // kernel for creating a user namespace.
 //
-// Deprecated: use [user.IDMap] instead
+// Deprecated: use [user.IDMap] instead.
 type IDMap struct {
 	ContainerID int `json:"container_id"`
 	HostID      int `json:"host_id"`
@@ -22,7 +22,7 @@ type IDMap struct {
 // ownership to the requested uid/gid.  If the directory already exists, this
 // function will still change ownership and permissions.
 //
-// Deprecated: use user.MkdirAllAndChown instead
+// Deprecated: use [user.MkdirAllAndChown] instead.
 func MkdirAllAndChown(path string, mode os.FileMode, owner Identity) error {
 	return user.MkdirAllAndChown(path, mode, owner.UID, owner.GID)
 }
@@ -32,7 +32,7 @@ func MkdirAllAndChown(path string, mode os.FileMode, owner Identity) error {
 // Note that unlike os.Mkdir(), this function does not return IsExist error
 // in case path already exists.
 //
-// Deprecated: use user.MkdirAndChown instead
+// Deprecated: use [user.MkdirAndChown] instead.
 func MkdirAndChown(path string, mode os.FileMode, owner Identity) error {
 	return user.MkdirAndChown(path, mode, owner.UID, owner.GID)
 }
@@ -41,7 +41,7 @@ func MkdirAndChown(path string, mode os.FileMode, owner Identity) error {
 // ownership ONLY of newly created directories to the requested uid/gid. If the
 // directories along the path exist, no change of ownership or permissions will be performed
 //
-// Deprecated: use user.MkdirAllAndChown instead
+// Deprecated: use [user.MkdirAllAndChown] instead.
 func MkdirAllAndChownNew(path string, mode os.FileMode, owner Identity) error {
 	return user.MkdirAllAndChown(path, mode, owner.UID, owner.GID, user.WithOnlyNew)
 }
@@ -49,7 +49,7 @@ func MkdirAllAndChownNew(path string, mode os.FileMode, owner Identity) error {
 // GetRootUIDGID retrieves the remapped root uid/gid pair from the set of maps.
 // If the maps are empty, then the root uid/gid will default to "real" 0/0
 //
-// Deprecated: use [(user.IdentityMapping).RootPair] instead
+// Deprecated: use [(user.IdentityMapping).RootPair] instead.
 func GetRootUIDGID(uidMap, gidMap []IDMap) (int, int, error) {
 	uid, err := toHost(0, uidMap)
 	if err != nil {
@@ -115,7 +115,7 @@ type IdentityMapping struct {
 
 // FromUserIdentityMapping converts a [user.IdentityMapping] to an [idtools.IdentityMapping].
 //
-// Deprecated: use [user.IdentityMapping] directly, this is transitioning to user package
+// Deprecated: use [user.IdentityMapping] directly, this is transitioning to user package.
 func FromUserIdentityMapping(u user.IdentityMapping) IdentityMapping {
 	return IdentityMapping{
 		UIDMaps: fromUserIDMap(u.UIDMaps),
@@ -182,7 +182,7 @@ func (i IdentityMapping) Empty() bool {
 
 // CurrentIdentity returns the identity of the current process
 //
-// Deprecated: use os.Getuid() and os.Getegid() instead
+// Deprecated: use [os.Getuid] and [os.Getegid] instead.
 func CurrentIdentity() Identity {
 	return Identity{UID: os.Getuid(), GID: os.Getegid()}
 }

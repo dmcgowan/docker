@@ -162,7 +162,7 @@ Function Get-HeadCommit() {
 
 # Utility function to get the commit for upstream
 Function Get-UpstreamCommit() {
-    Invoke-Expression "git fetch -q https://github.com/moby/moby.git refs/heads/master"
+    Invoke-Expression "git fetch -q https://github.com/docker/dockerd.git refs/heads/main"
     if ($LASTEXITCODE -ne 0) { Throw "Failed fetching" }
 
     $upstream = Invoke-Expression "git rev-parse --verify FETCH_HEAD"

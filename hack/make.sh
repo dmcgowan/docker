@@ -6,7 +6,7 @@ set -e
 #
 # Requirements:
 # - The current directory should be a checkout of the docker source code
-#   (https://github.com/moby/moby). Whatever version is checked out
+#   (https://github.com/docker/dockerd). Whatever version is checked out
 #   will be built.
 # - The VERSION file, at the root of the repository, should exist, and
 #   will be used as Docker binary version and package version.
@@ -23,7 +23,7 @@ set -e
 
 set -o pipefail
 
-export DOCKER_PKG='github.com/moby/moby'
+export DOCKER_PKG='github.com/docker/dockerd/v29'
 export SCRIPTDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 export MAKEDIR="$SCRIPTDIR/make"
 export PKG_CONFIG=${PKG_CONFIG:-pkg-config}

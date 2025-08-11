@@ -41,9 +41,9 @@ install: all
 		$(INSTALL_DATA) man$$sec/* $(DESTDIR)$(mandir)/man$$sec; \
 	done
 
-.build/go-md2man: go.mod go.sum
-	GO111MODULE=auto go build -o $@ github.com/cpuguy83/go-md2man/v2
+.build/go-md2man:
+	GOBIN=${CURDIR}/.build go install github.com/cpuguy83/go-md2man/v2@latest
 
 .PHONY: clean
 clean:
-	rm -r man* .build
+	rm -rf man* .build

@@ -248,35 +248,6 @@ Function Validate-DCO($headCommit, $upstreamCommit) {
     }
 }
 
-# Validates that .\pkg\... is safely isolated from internal code
-Function Validate-PkgImports($headCommit, $upstreamCommit) {
-    Write-Host "INFO: Validating pkg import isolation..."
-
-    # Get a list of go source-code files which have changed under pkg\. Ignore exit code on next call - always process regardless
-    $files=@(); $files = Invoke-Expression "git diff $upstreamCommit...$headCommit --diff-filter=ACMR --name-only -- `'pkg\*.go`'"
-    $badFiles=@(); $files | ForEach-Object{
-        $file=$_
-        # For the current changed file, get its list of dependencies, sorted and uniqued.
-        $imports = Invoke-Expression "go list -e -f `'{{ .Deps }}`' $file"
-        if ($LASTEXITCODE -ne 0) { Throw "Failed go list for dependencies on $file" }
-        $imports = $imports -Replace "\[" -Replace "\]", "" -Split(" ") | Sort-Object | Get-Unique
-        # Filter out what we are looking for
-        $imports = @() + $imports -NotMatch "^github.com/moby/moby/v2/pkg/" `
-                                  -NotMatch "^github.com/moby/moby/v2/vendor" `
-                                  -NotMatch "^github.com/moby/moby/v2/internal" `
-                                  -Match    "^github.com/moby/moby/v2" `
-                                  -Replace "`n", ""
-        $imports | ForEach-Object{ $badFiles+="$file imports $_`n" }
-    }
-    if ($badFiles.Length -eq 0) {
-        Write-Host 'Congratulations!  ".\pkg\*.go" is safely isolated from internal code.'
-    } else {
-        $e = "`nThese files import internal code: (either directly or indirectly)`n"
-        $badFiles | ForEach-Object{ $e+=" - $_"}
-        Throw $e
-    }
-}
-
 # Validates that changed files are correctly go-formatted
 Function Validate-GoFormat($headCommit, $upstreamCommit) {
     Write-Host "INFO: Validating go formatting on changed files..."
@@ -312,118 +283,6 @@ Function Validate-GoFormat($headCommit, $upstreamCommit) {
         $e+= "`nPlease reformat the above files using `"gofmt -s -w`" and commit the result."
         Throw $e
     }
-}
-
-# Run the unit tests
-Function Run-UnitTests() {
-    Write-Host "INFO: Running unit tests..."
-    $testPath="./..."
-    $goListCommand = "go list -e -f '{{if ne .Name """ + '\"github.com/moby/moby/v2\"' + """}}{{.ImportPath}}{{end}}' $testPath"
-    $pkgList = $(Invoke-Expression $goListCommand)
-    if ($LASTEXITCODE -ne 0) { Throw "go list for unit tests failed" }
-    $pkgList = $pkgList | Select-String -Pattern "github.com/moby/moby/v2"
-    $pkgList = $pkgList | Select-String -NotMatch "github.com/moby/moby/v2/integration"
-    $pkgList = $pkgList -replace "`r`n", " "
-
-    $jsonFilePath = $bundlesDir + "\go-test-report-unit-flaky-tests.json"
-    $xmlFilePath = $bundlesDir + "\junit-report-unit-flaky-tests.xml"
-    $coverageFilePath = $bundlesDir + "\coverage-report-unit-flaky-tests.txt"
-    $goTestArg = "--rerun-fails=4  --format=standard-verbose --jsonfile=$jsonFilePath --junitfile=$xmlFilePath """ + "--packages=$pkgList" + """ -- " + $raceParm + " -coverprofile=$coverageFilePath -covermode=atomic -ldflags -w -a -test.timeout=10m -test.run=TestFlaky.*"
-    Write-Host "INFO: Invoking unit tests run with $GOTESTSUM_LOCATION\gotestsum.exe $goTestArg"
-    $pinfo = New-Object System.Diagnostics.ProcessStartInfo
-    $pinfo.FileName = "$GOTESTSUM_LOCATION\gotestsum.exe"
-    $pinfo.WorkingDirectory = "$($PWD.Path)"
-    $pinfo.UseShellExecute = $false
-    $pinfo.Arguments = $goTestArg
-    $p = New-Object System.Diagnostics.Process
-    $p.StartInfo = $pinfo
-    $p.Start() | Out-Null
-    $p.WaitForExit()
-    if ($p.ExitCode -ne 0) { Throw "Unit tests (flaky) failed" }
-
-    $jsonFilePath = $bundlesDir + "\go-test-report-unit-tests.json"
-    $xmlFilePath = $bundlesDir + "\junit-report-unit-tests.xml"
-    $coverageFilePath = $bundlesDir + "\coverage-report-unit-tests.txt"
-    $goTestArg = "--format=standard-verbose --jsonfile=$jsonFilePath --junitfile=$xmlFilePath -- " + $raceParm + " -coverprofile=$coverageFilePath -covermode=atomic -ldflags -w -a -test.timeout=10m -test.skip=TestFlaky.*" + " $pkgList"
-    Write-Host "INFO: Invoking unit tests run with $GOTESTSUM_LOCATION\gotestsum.exe $goTestArg"
-    $pinfo = New-Object System.Diagnostics.ProcessStartInfo
-    $pinfo.FileName = "$GOTESTSUM_LOCATION\gotestsum.exe"
-    $pinfo.WorkingDirectory = "$($PWD.Path)"
-    $pinfo.UseShellExecute = $false
-    $pinfo.Arguments = $goTestArg
-    $p = New-Object System.Diagnostics.Process
-    $p.StartInfo = $pinfo
-    $p.Start() | Out-Null
-    $p.WaitForExit()
-    if ($p.ExitCode -ne 0) { Throw "Unit tests failed" }
-}
-
-# Run the integration tests
-Function Run-IntegrationTests() {
-    $escRoot = [Regex]::Escape($root)
-    $env:DOCKER_INTEGRATION_DAEMON_DEST = $bundlesDir + "\tmp"
-    $dirs = go list -test -f '{{- if ne .ForTest "" -}}{{- .Dir -}}{{- end -}}' .\integration\...
-    ForEach($dir in $dirs) {
-        # Normalize directory name for using in the test results files.
-        $normDir = $dir.Trim()
-        $normDir = $normDir -replace $escRoot, ""
-        $normDir = $normDir -replace "\\", "-"
-        $normDir = $normDir -replace "\/", "-"
-        $normDir = $normDir -replace "\.", "-"
-        if ($normDir.StartsWith("-"))
-        {
-            $normDir = $normDir.TrimStart("-")
-        }
-        if ($normDir.EndsWith("-"))
-        {
-            $normDir = $normDir.TrimEnd("-")
-        }
-        $jsonFilePath = $bundlesDir + "\go-test-report-int-tests-$normDir" + ".json"
-        $xmlFilePath = $bundlesDir + "\junit-report-int-tests-$normDir" + ".xml"
-        $coverageFilePath = $bundlesDir + "\coverage-report-int-tests-$normDir" + ".txt"
-        Set-Location $dir
-        Write-Host "Running $($PWD.Path)"
-        $pinfo = New-Object System.Diagnostics.ProcessStartInfo
-        $pinfo.FileName = "gotestsum.exe"
-        $pinfo.WorkingDirectory = "$($PWD.Path)"
-        $pinfo.UseShellExecute = $false
-        $pinfo.Arguments = "--format=standard-verbose --jsonfile=$jsonFilePath --junitfile=$xmlFilePath -- -coverprofile=$coverageFilePath -covermode=atomic -test.timeout=60m $env:INTEGRATION_TESTFLAGS"
-        $p = New-Object System.Diagnostics.Process
-        $p.StartInfo = $pinfo
-        $p.Start() | Out-Null
-        $p.WaitForExit()
-        if ($p.ExitCode -ne 0) { Throw "Integration tests failed" }
-    }
-}
-
-# Run the integration-cli tests
-Function Run-IntegrationCliTests() {
-    Write-Host "INFO: Running integration-cli tests..."
-
-    $goTestRun = ""
-    $reportSuffix = ""
-    if ($env:INTEGRATION_TESTRUN.Length -ne 0)
-    {
-        $goTestRun = "-test.run=($env:INTEGRATION_TESTRUN)/"
-        $reportSuffixStream = [IO.MemoryStream]::new([byte[]][char[]]$env:INTEGRATION_TESTRUN)
-        $reportSuffix = "-" + (Get-FileHash -InputStream $reportSuffixStream -Algorithm SHA256).Hash
-    }
-
-    $jsonFilePath = $bundlesDir + "\go-test-report-int-cli-tests$reportSuffix.json"
-    $xmlFilePath = $bundlesDir + "\junit-report-int-cli-tests$reportSuffix.xml"
-    $coverageFilePath = $bundlesDir + "\coverage-report-int-cli-tests$reportSuffix.txt"
-    $goTestArg = "--format=standard-verbose --packages=./integration-cli/... --jsonfile=$jsonFilePath --junitfile=$xmlFilePath -- -coverprofile=$coverageFilePath -covermode=atomic -tags=autogen -test.timeout=200m $goTestRun $env:INTEGRATION_TESTFLAGS"
-    Write-Host "INFO: Invoking integration-cli tests run with gotestsum.exe $goTestArg"
-    $pinfo = New-Object System.Diagnostics.ProcessStartInfo
-    $pinfo.FileName = "gotestsum.exe"
-    $pinfo.WorkingDirectory = "$($PWD.Path)"
-    $pinfo.UseShellExecute = $false
-    $pinfo.Arguments = $goTestArg
-    $p = New-Object System.Diagnostics.Process
-    $p.StartInfo = $pinfo
-    $p.Start() | Out-Null
-    $p.WaitForExit()
-    if ($p.ExitCode -ne 0) { Throw "integration-cli tests failed" }
 }
 
 # Start of main code.
@@ -500,9 +359,6 @@ Try {
 
         # Run `gofmt` validation
         if ($GoFormat) { Validate-GoFormat $headCommit $upstreamCommit }
-
-        # Run pkg isolation validation
-        if ($PkgImports) { Validate-PkgImports $headCommit $upstreamCommit }
     }
 
     # Build the binaries
@@ -537,15 +393,6 @@ Try {
             }
         }
     }
-
-    # Run unit tests
-    if ($TestUnit) { Run-UnitTests }
-
-    # Run integration tests
-    if ($TestIntegration) { Run-IntegrationTests }
-
-    # Run integration-cli tests
-    if ($TestIntegrationCli) { Run-IntegrationCliTests }
 
     # Gratuitous ASCII art.
     if ($Daemon -or $Client) {

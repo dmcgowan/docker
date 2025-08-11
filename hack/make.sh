@@ -34,8 +34,6 @@ echo
 DEFAULT_BUNDLES=(
 	binary-daemon
 	dynbinary
-	test-integration
-	test-docker-py
 )
 
 VERSION=${VERSION:-dev}

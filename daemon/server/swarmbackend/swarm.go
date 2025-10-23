@@ -2,7 +2,7 @@ package swarmbackend
 
 import (
 	"github.com/moby/moby/api/types/swarm"
-	"github.com/moby/moby/v2/daemon/internal/filters"
+	"github.com/moby/moby/v2/daemon/server/filters"
 )
 
 type ConfigListOptions struct {

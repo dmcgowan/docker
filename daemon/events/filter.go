@@ -3,7 +3,7 @@ package events
 import (
 	"github.com/distribution/reference"
 	"github.com/moby/moby/api/types/events"
-	"github.com/moby/moby/v2/daemon/internal/filters"
+	"github.com/moby/moby/v2/daemon/server/filters"
 )
 
 // Filter can filter out docker events from a stream

@@ -12,7 +12,7 @@ import (
 	"github.com/containerd/log"
 	"github.com/docker/distribution/registry/client/auth"
 	"github.com/moby/moby/api/types/registry"
-	"github.com/moby/moby/v2/daemon/internal/filters"
+	"github.com/moby/moby/v2/daemon/server/filters"
 	"github.com/pkg/errors"
 )
 

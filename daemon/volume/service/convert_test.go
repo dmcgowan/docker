@@ -3,7 +3,7 @@ package service
 import (
 	"testing"
 
-	"github.com/moby/moby/v2/daemon/internal/filters"
+	"github.com/moby/moby/v2/daemon/server/filters"
 	"gotest.tools/v3/assert"
 	is "gotest.tools/v3/assert/cmp"
 )

@@ -8,7 +8,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/v2/daemon/internal/filters"
+	"github.com/moby/moby/v2/daemon/server/filters"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 

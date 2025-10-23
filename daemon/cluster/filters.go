@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/moby/moby/v2/daemon/internal/filters"
+	"github.com/moby/moby/v2/daemon/server/filters"
 	swarmapi "github.com/moby/swarmkit/v2/api"
 )
 

@@ -9,7 +9,7 @@ import (
 	"github.com/containerd/log"
 	volumetypes "github.com/moby/moby/api/types/volume"
 	"github.com/moby/moby/v2/daemon/internal/directory"
-	"github.com/moby/moby/v2/daemon/internal/filters"
+	"github.com/moby/moby/v2/daemon/server/filters"
 	"github.com/moby/moby/v2/daemon/volume"
 	"github.com/moby/moby/v2/errdefs"
 )

@@ -3,8 +3,8 @@ package network
 import (
 	"time"
 
-	"github.com/moby/moby/v2/daemon/internal/filters"
 	"github.com/moby/moby/v2/daemon/internal/timestamp"
+	"github.com/moby/moby/v2/daemon/server/filters"
 	"github.com/moby/moby/v2/errdefs"
 	"github.com/pkg/errors"
 )

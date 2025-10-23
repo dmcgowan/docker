@@ -11,8 +11,8 @@ import (
 	"github.com/moby/moby/api/types/events"
 	"github.com/moby/moby/v2/daemon/container"
 	daemonevents "github.com/moby/moby/v2/daemon/events"
-	"github.com/moby/moby/v2/daemon/internal/filters"
 	"github.com/moby/moby/v2/daemon/libnetwork"
+	"github.com/moby/moby/v2/daemon/server/filters"
 	swarmapi "github.com/moby/swarmkit/v2/api"
 )
 

@@ -3,12 +3,12 @@ package buildbackend
 import (
 	"io"
 
+	"github.com/moby/moby/v2/daemon/server/filters"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 
 	"github.com/moby/moby/api/types/build"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/registry"
-	"github.com/moby/moby/v2/daemon/internal/filters"
 )
 
 type DiskUsageOptions struct {

@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/v2/daemon/internal/filters"
 	dnetwork "github.com/moby/moby/v2/daemon/network"
 	"github.com/moby/moby/v2/daemon/server/backend"
+	"github.com/moby/moby/v2/daemon/server/filters"
 )
 
 // Backend is all the methods that need to be implemented

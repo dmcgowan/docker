@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/moby/moby/v2/daemon/config"
 	"github.com/moby/moby/v2/daemon/server/httputils"
 	"github.com/moby/moby/v2/daemon/server/middleware"
 )
@@ -15,7 +14,7 @@ import (
 func TestMiddlewares(t *testing.T) {
 	srv := &Server{}
 
-	m, err := middleware.NewVersionMiddleware("0.1omega2", config.MaxAPIVersion, config.MinAPIVersion)
+	m, err := middleware.NewVersionMiddleware("0.1omega2", middleware.MaxAPIVersion, middleware.MinAPIVersion)
 	if err != nil {
 		t.Fatal(err)
 	}

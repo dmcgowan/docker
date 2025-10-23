@@ -13,7 +13,7 @@ import (
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/versions"
-	"github.com/moby/moby/v2/daemon/config"
+	"github.com/moby/moby/v2/daemon/server/middleware"
 	"github.com/moby/moby/v2/daemon/volume"
 	"github.com/moby/moby/v2/integration/internal/container"
 	"github.com/moby/moby/v2/internal/testutil"
@@ -512,7 +512,7 @@ func TestContainerBindMountReadOnlyDefault(t *testing.T) {
 		{clientVersion: "1.43", expectedOut: nonRecursive, name: "older than 1.44 should be non-recursive by default"},
 
 		// TODO: Remove when DefaultMinAPIVersion >= 1.44
-		{clientVersion: config.MinAPIVersion, expectedOut: nonRecursive, name: "minimum API should be non-recursive by default"},
+		{clientVersion: middleware.MinAPIVersion, expectedOut: nonRecursive, name: "minimum API should be non-recursive by default"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			apiClient := testEnv.APIClient()

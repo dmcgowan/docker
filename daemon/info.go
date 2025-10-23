@@ -19,6 +19,7 @@ import (
 	"github.com/moby/moby/v2/daemon/internal/platform"
 	"github.com/moby/moby/v2/daemon/logger"
 	"github.com/moby/moby/v2/daemon/pkg/registry"
+	"github.com/moby/moby/v2/daemon/server/middleware"
 	"github.com/moby/moby/v2/dockerversion"
 	"github.com/moby/moby/v2/pkg/meminfo"
 	"github.com/moby/moby/v2/pkg/parsers/kernel"
@@ -113,7 +114,7 @@ func (daemon *Daemon) SystemVersion(ctx context.Context) (system.VersionResponse
 				Version: dockerversion.Version,
 				Details: map[string]string{
 					"GitCommit":     dockerversion.GitCommit,
-					"ApiVersion":    config.MaxAPIVersion,
+					"ApiVersion":    middleware.MaxAPIVersion,
 					"MinAPIVersion": cfg.MinAPIVersion,
 					"GoVersion":     runtime.Version(),
 					"Os":            runtime.GOOS,
@@ -128,7 +129,7 @@ func (daemon *Daemon) SystemVersion(ctx context.Context) (system.VersionResponse
 		// Populate deprecated fields for older clients
 		Version:       dockerversion.Version,
 		GitCommit:     dockerversion.GitCommit,
-		APIVersion:    config.MaxAPIVersion,
+		APIVersion:    middleware.MaxAPIVersion,
 		MinAPIVersion: cfg.MinAPIVersion,
 		GoVersion:     runtime.Version(),
 		Os:            runtime.GOOS,

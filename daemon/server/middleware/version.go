@@ -6,9 +6,18 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/moby/moby/v2/daemon/config"
 	"github.com/moby/moby/v2/daemon/internal/versions"
 	"github.com/moby/moby/v2/daemon/server/httputils"
+)
+
+const (
+	// MaxAPIVersion is the highest REST API version supported by the daemon.
+	//
+	// This version may be lower than the version of the api library module used.
+	MaxAPIVersion = "1.52"
+
+	// MinAPIVersion is the minimum API version supported by the daemon.
+	MinAPIVersion = "1.24"
 )
 
 // VersionMiddleware is a middleware that
@@ -34,11 +43,11 @@ type VersionMiddleware struct {
 
 // NewVersionMiddleware creates a VersionMiddleware with the given versions.
 func NewVersionMiddleware(serverVersion, defaultAPIVersion, minAPIVersion string) (*VersionMiddleware, error) {
-	if versions.LessThan(defaultAPIVersion, config.MinAPIVersion) || versions.GreaterThan(defaultAPIVersion, config.MaxAPIVersion) {
-		return nil, fmt.Errorf("invalid default API version (%s): must be between %s and %s", defaultAPIVersion, config.MinAPIVersion, config.MaxAPIVersion)
+	if versions.LessThan(defaultAPIVersion, MinAPIVersion) || versions.GreaterThan(defaultAPIVersion, MaxAPIVersion) {
+		return nil, fmt.Errorf("invalid default API version (%s): must be between %s and %s", defaultAPIVersion, MinAPIVersion, MaxAPIVersion)
 	}
-	if versions.LessThan(minAPIVersion, config.MinAPIVersion) || versions.GreaterThan(minAPIVersion, config.MaxAPIVersion) {
-		return nil, fmt.Errorf("invalid minimum API version (%s): must be between %s and %s", minAPIVersion, config.MinAPIVersion, config.MaxAPIVersion)
+	if versions.LessThan(minAPIVersion, MinAPIVersion) || versions.GreaterThan(minAPIVersion, MaxAPIVersion) {
+		return nil, fmt.Errorf("invalid minimum API version (%s): must be between %s and %s", minAPIVersion, MinAPIVersion, MaxAPIVersion)
 	}
 	if versions.GreaterThan(minAPIVersion, defaultAPIVersion) {
 		return nil, fmt.Errorf("invalid API version: the minimum API version (%s) is higher than the default version (%s)", minAPIVersion, defaultAPIVersion)

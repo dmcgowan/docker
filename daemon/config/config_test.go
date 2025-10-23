@@ -16,6 +16,7 @@ import (
 	"github.com/moby/moby/v2/daemon/libnetwork/ipamutils"
 	"github.com/moby/moby/v2/daemon/pkg/opts"
 	"github.com/moby/moby/v2/daemon/pkg/registry"
+	"github.com/moby/moby/v2/daemon/server/middleware"
 	"github.com/spf13/pflag"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/unicode"
@@ -633,7 +634,7 @@ func TestValidateMinAPIVersion(t *testing.T) {
 		},
 		{
 			doc:   "current version",
-			input: MaxAPIVersion,
+			input: middleware.MaxAPIVersion,
 		},
 	}
 

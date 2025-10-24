@@ -8,11 +8,11 @@ import (
 
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/v2/daemon/builder"
-	containerpkg "github.com/moby/moby/v2/daemon/container"
 	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/layer"
 	"github.com/moby/moby/v2/daemon/server/backend"
 	"github.com/moby/moby/v2/daemon/server/buildbackend"
+	containerbackend "github.com/moby/moby/v2/daemon/server/router/container"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
@@ -51,7 +51,7 @@ func (m *MockBackend) ContainerStart(ctx context.Context, containerID string, ch
 	return nil
 }
 
-func (m *MockBackend) ContainerWait(ctx context.Context, containerID string, condition container.WaitCondition) (<-chan containerpkg.StateStatus, error) {
+func (m *MockBackend) ContainerWait(ctx context.Context, containerID string, condition container.WaitCondition) (<-chan containerbackend.StateStatus, error) {
 	return nil, nil
 }
 

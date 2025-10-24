@@ -7,7 +7,6 @@ import (
 	"github.com/moby/go-archive"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
-	containerpkg "github.com/moby/moby/v2/daemon/container"
 	"github.com/moby/moby/v2/daemon/server/backend"
 	"github.com/moby/moby/v2/daemon/server/filters"
 	"github.com/moby/moby/v2/pkg/sysinfo"
@@ -43,7 +42,7 @@ type stateBackend interface {
 	ContainerStop(ctx context.Context, name string, options backend.ContainerStopOptions) error
 	ContainerUnpause(name string) error
 	ContainerUpdate(name string, hostConfig *container.HostConfig) (container.UpdateResponse, error)
-	ContainerWait(ctx context.Context, name string, condition container.WaitCondition) (<-chan containerpkg.StateStatus, error)
+	ContainerWait(ctx context.Context, name string, condition container.WaitCondition) (<-chan StateStatus, error)
 }
 
 // monitorBackend includes functions to implement to provide containers monitoring functionality.

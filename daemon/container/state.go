@@ -10,6 +10,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/moby/moby/api/types/container"
 	libcontainerdtypes "github.com/moby/moby/v2/daemon/internal/libcontainerd/types"
+	containerbackend "github.com/moby/moby/v2/daemon/server/router/container"
 )
 
 // State holds the current container state, and has methods to get and
@@ -46,8 +47,8 @@ type State struct {
 	Health            *Health
 	Removed           bool `json:"-"`
 
-	stopWaiters       []chan<- StateStatus
-	removeOnlyWaiters []chan<- StateStatus
+	stopWaiters       []chan<- containerbackend.StateStatus
+	removeOnlyWaiters []chan<- containerbackend.StateStatus
 
 	// The libcontainerd reference fields are unexported to force consumers
 	// to access them through the getter methods with multi-valued returns
@@ -56,26 +57,6 @@ type State struct {
 
 	ctr  libcontainerdtypes.Container
 	task libcontainerdtypes.Task
-}
-
-// StateStatus is used to return container wait results.
-// Implements exec.ExitCode interface.
-// This type is needed as State include a sync.Mutex field which make
-// copying it unsafe.
-type StateStatus struct {
-	exitCode int
-	err      error
-}
-
-// ExitCode returns current exitcode for the state.
-func (s StateStatus) ExitCode() int {
-	return s.exitCode
-}
-
-// Err returns current error for the state. Returns nil if the container had
-// exited on its own.
-func (s StateStatus) Err() error {
-	return s.err
 }
 
 // String returns a human-readable description of the state
@@ -153,23 +134,19 @@ func (s *State) State() container.ContainerState {
 // be nil and its ExitCode() method will return the container's exit code,
 // otherwise, the results Err() method will return an error indicating why the
 // wait operation failed.
-func (s *State) Wait(ctx context.Context, condition container.WaitCondition) <-chan StateStatus {
+func (s *State) Wait(ctx context.Context, condition container.WaitCondition) <-chan containerbackend.StateStatus {
 	s.Lock()
 	defer s.Unlock()
 
 	// Buffer so we can put status and finish even nobody receives it.
-	resultC := make(chan StateStatus, 1)
+	resultC := make(chan containerbackend.StateStatus, 1)
 
 	if s.conditionAlreadyMet(condition) {
-		resultC <- StateStatus{
-			exitCode: s.ExitCode,
-			err:      s.Err(),
-		}
-
+		resultC <- containerbackend.NewStateStatus(s.ExitCode, s.Err())
 		return resultC
 	}
 
-	waitC := make(chan StateStatus, 1)
+	waitC := make(chan containerbackend.StateStatus, 1)
 
 	// Removal wakes up both removeOnlyWaiters and stopWaiters
 	// Container could be removed while still in "created" state
@@ -184,10 +161,7 @@ func (s *State) Wait(ctx context.Context, condition container.WaitCondition) <-c
 		select {
 		case <-ctx.Done():
 			// Context timeout or cancellation.
-			resultC <- StateStatus{
-				exitCode: -1,
-				err:      ctx.Err(),
-			}
+			resultC <- containerbackend.NewStateStatus(-1, ctx.Err())
 			return
 		case status := <-waitC:
 			resultC <- status
@@ -411,12 +385,8 @@ func (s *State) Err() error {
 	return nil
 }
 
-func (s *State) notifyAndClear(waiters *[]chan<- StateStatus) {
-	result := StateStatus{
-		exitCode: s.ExitCode,
-		err:      s.Err(),
-	}
-
+func (s *State) notifyAndClear(waiters *[]chan<- containerbackend.StateStatus) {
+	result := containerbackend.NewStateStatus(s.ExitCode, s.Err())
 	for _, c := range *waiters {
 		c <- result
 	}

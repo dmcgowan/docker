@@ -4,7 +4,7 @@ import (
 	"context"
 
 	containertypes "github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/v2/daemon/container"
+	containerbackend "github.com/moby/moby/v2/daemon/server/router/container"
 )
 
 // ContainerWait waits until the given container is in a certain state
@@ -14,7 +14,7 @@ import (
 // condition is met or if an error occurs waiting for the container (such as a
 // context timeout or cancellation). On a successful wait, the exit code of the
 // container is returned in the status with a non-nil Err() value.
-func (daemon *Daemon) ContainerWait(ctx context.Context, name string, condition containertypes.WaitCondition) (<-chan container.StateStatus, error) {
+func (daemon *Daemon) ContainerWait(ctx context.Context, name string, condition containertypes.WaitCondition) (<-chan containerbackend.StateStatus, error) {
 	cntr, err := daemon.GetContainer(name)
 	if err != nil {
 		return nil, err

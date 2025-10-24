@@ -56,7 +56,7 @@ func validateResources(hc *container.HostConfig, si *sysinfo.SysInfo) error {
 	if hc.Resources.CPURealtimePeriod != 0 && hc.Resources.CPURealtimeRuntime != 0 && hc.Resources.CPURealtimeRuntime > hc.Resources.CPURealtimePeriod {
 		return validationError("cpu real-time runtime cannot be higher than cpu real-time period")
 	}
-	if si.CPUShares {
+	if si != nil && si.CPUShares {
 		// We're only producing an error if CPU-shares are supported to preserve
 		// existing behavior. The OCI runtime may still reject the config though.
 		// We should consider making this an error-condition when trying to set

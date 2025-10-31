@@ -7,9 +7,9 @@ import (
 	"github.com/distribution/reference"
 	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/api/types/registry"
-	dockerimage "github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/server/filters"
 	"github.com/moby/moby/v2/daemon/server/imagebackend"
+	dockerimage "github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 

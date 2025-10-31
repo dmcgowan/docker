@@ -9,10 +9,10 @@ import (
 	"io"
 
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/layer"
 	"github.com/moby/moby/v2/daemon/server/backend"
 	"github.com/moby/moby/v2/daemon/server/buildbackend"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	containerbackend "github.com/moby/moby/v2/daemon/server/router/container"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"

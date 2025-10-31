@@ -15,10 +15,10 @@ import (
 	imagetypes "github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/v2/daemon/container"
 	dimages "github.com/moby/moby/v2/daemon/images"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/metrics"
 	"github.com/moby/moby/v2/daemon/internal/stringid"
 	"github.com/moby/moby/v2/daemon/server/imagebackend"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 

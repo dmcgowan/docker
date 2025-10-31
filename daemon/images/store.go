@@ -10,8 +10,8 @@ import (
 	cerrdefs "github.com/containerd/errdefs"
 	"github.com/containerd/log"
 	"github.com/moby/moby/v2/daemon/internal/distribution"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/layer"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )

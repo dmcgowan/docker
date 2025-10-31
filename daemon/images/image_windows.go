@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/moby/moby/v2/daemon/container"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/layer"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	"github.com/pkg/errors"
 )
 

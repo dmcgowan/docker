@@ -7,8 +7,8 @@ import (
 	"github.com/containerd/log"
 	"github.com/containerd/platforms"
 	"github.com/moby/moby/v2/daemon/builder"
-	dockerimage "github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/server/buildbackend"
+	dockerimage "github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )

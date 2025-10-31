@@ -14,9 +14,9 @@ import (
 	"github.com/moby/moby/v2/daemon/internal/distribution"
 	"github.com/moby/moby/v2/daemon/internal/distribution/metadata"
 	"github.com/moby/moby/v2/daemon/internal/distribution/xfer"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/layer"
 	refstore "github.com/moby/moby/v2/daemon/internal/refstore"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )

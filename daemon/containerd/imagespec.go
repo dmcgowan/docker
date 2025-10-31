@@ -6,7 +6,7 @@ import (
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/v2/daemon/internal/image"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 

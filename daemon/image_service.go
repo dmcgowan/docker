@@ -11,12 +11,12 @@ import (
 	"github.com/moby/moby/v2/daemon/builder"
 	"github.com/moby/moby/v2/daemon/container"
 	"github.com/moby/moby/v2/daemon/images"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/layer"
 	"github.com/moby/moby/v2/daemon/server/backend"
 	"github.com/moby/moby/v2/daemon/server/buildbackend"
 	"github.com/moby/moby/v2/daemon/server/filters"
 	"github.com/moby/moby/v2/daemon/server/imagebackend"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )

@@ -11,9 +11,9 @@ import (
 	"github.com/moby/moby/v2/daemon/builder"
 	daemonevents "github.com/moby/moby/v2/daemon/events"
 	buildkit "github.com/moby/moby/v2/daemon/internal/builder-next"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/stringid"
 	"github.com/moby/moby/v2/daemon/server/buildbackend"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 )

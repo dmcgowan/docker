@@ -19,11 +19,11 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/v2/daemon/builder"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/stringid"
 	networkSettings "github.com/moby/moby/v2/daemon/network"
 	"github.com/moby/moby/v2/daemon/server/backend"
 	"github.com/moby/moby/v2/daemon/server/buildbackend"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )

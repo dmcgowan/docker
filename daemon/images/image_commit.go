@@ -7,9 +7,9 @@ import (
 	"io"
 
 	"github.com/moby/moby/api/types/events"
-	"github.com/moby/moby/v2/daemon/internal/image"
 	"github.com/moby/moby/v2/daemon/internal/layer"
 	"github.com/moby/moby/v2/daemon/server/backend"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
 	"github.com/moby/moby/v2/errdefs"
 	"github.com/moby/moby/v2/pkg/ioutils"
 )

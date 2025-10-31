@@ -7,10 +7,10 @@ import (
 
 	"github.com/containerd/log"
 	"github.com/moby/moby/v2/daemon/builder"
-	"github.com/moby/moby/v2/daemon/internal/image"
-	"github.com/moby/moby/v2/daemon/internal/image/cache"
 	"github.com/moby/moby/v2/daemon/internal/layer"
 	"github.com/moby/moby/v2/daemon/server/imagebackend"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image"
+	"github.com/moby/moby/v2/daemon/server/imagebackend/image/cache"
 )
 
 type cacheAdaptor struct {

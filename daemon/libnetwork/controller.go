@@ -71,6 +71,7 @@ import (
 	"github.com/moby/moby/v2/daemon/libnetwork/osl"
 	"github.com/moby/moby/v2/daemon/libnetwork/scope"
 	"github.com/moby/moby/v2/daemon/libnetwork/types"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	"github.com/moby/moby/v2/errdefs"
 	"github.com/moby/moby/v2/pkg/plugingetter"
 	"github.com/moby/moby/v2/pkg/plugins"
@@ -505,7 +506,7 @@ func (c *Controller) NewNetwork(ctx context.Context, networkType, name string, i
 		defer c.networkLocker.Unlock(id) //nolint:errcheck
 
 		if _, err := c.NetworkByID(id); err == nil {
-			return nil, NetworkNameError(id)
+			return nil, networkbackend.NetworkNameError(id)
 		}
 	}
 
@@ -520,7 +521,7 @@ func (c *Controller) NewNetwork(ctx context.Context, networkType, name string, i
 		defer c.networkLocker.Unlock(name)
 
 		if _, err := c.NetworkByName(name); err == nil {
-			return nil, NetworkNameError(name)
+			return nil, networkbackend.NetworkNameError(name)
 		}
 	}
 
@@ -598,7 +599,7 @@ func (c *Controller) NewNetwork(ctx context.Context, networkType, name string, i
 				return nil, types.InvalidParameterErrorf("IPv4 cannot be disabled in a Swarm scoped network")
 			}
 			// For non-distributed controlled environment, globalscoped non-dynamic networks are redirected to Manager
-			return nil, ManagerRedirectError(name)
+			return nil, networkbackend.ManagerRedirectError(name)
 		}
 		return nil, types.ForbiddenErrorf("Cannot create a multi-host network from a worker node. Please create the network from a manager node.")
 	}
@@ -839,7 +840,7 @@ func (c *Controller) WalkNetworks(walker NetworkWalker) {
 }
 
 // NetworkByName returns the Network which has the passed name.
-// If not found, the error [ErrNoSuchNetwork] is returned.
+// If not found, the error [networkbackend.ErrNoSuchNetwork] is returned.
 func (c *Controller) NetworkByName(name string) (*Network, error) {
 	if name == "" {
 		return nil, types.InvalidParameterErrorf("invalid name: name is empty")
@@ -855,14 +856,14 @@ func (c *Controller) NetworkByName(name string) (*Network, error) {
 	})
 
 	if n == nil {
-		return nil, ErrNoSuchNetwork(name)
+		return nil, networkbackend.ErrNoSuchNetwork(name)
 	}
 
 	return n, nil
 }
 
 // NetworkByID returns the Network which has the passed id.
-// If not found, the error [ErrNoSuchNetwork] is returned.
+// If not found, the error [networkbackend.ErrNoSuchNetwork] is returned.
 func (c *Controller) NetworkByID(id string) (*Network, error) {
 	if id == "" {
 		return nil, types.InvalidParameterErrorf("invalid id: id is empty")

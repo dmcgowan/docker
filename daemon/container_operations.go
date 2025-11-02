@@ -27,6 +27,7 @@ import (
 	"github.com/moby/moby/v2/daemon/libnetwork/types"
 	"github.com/moby/moby/v2/daemon/network"
 	"github.com/moby/moby/v2/daemon/pkg/opts"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	"github.com/moby/moby/v2/errdefs"
 	"github.com/moby/moby/v2/internal/sliceutil"
 	"go.opentelemetry.io/otel"
@@ -322,7 +323,7 @@ func (daemon *Daemon) findAndAttachNetwork(ctr *container.Container, idOrName st
 			// and removed the network while we were in
 			// the process of attaching.
 			if nwCfg != nil {
-				if _, ok := err.(libnetwork.ErrNoSuchNetwork); ok {
+				if _, ok := err.(networkbackend.ErrNoSuchNetwork); ok {
 					if retryCount >= 5 {
 						return nil, nil, fmt.Errorf("could not find network %s after successful attachment", idOrName)
 					}

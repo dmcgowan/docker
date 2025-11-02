@@ -30,6 +30,7 @@ import (
 	"github.com/moby/moby/v2/daemon/libnetwork/options"
 	"github.com/moby/moby/v2/daemon/libnetwork/scope"
 	"github.com/moby/moby/v2/daemon/libnetwork/types"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	"github.com/moby/moby/v2/errdefs"
 	"github.com/moby/moby/v2/internal/iterutil"
 	"github.com/moby/moby/v2/internal/sliceutil"
@@ -1023,7 +1024,7 @@ func (n *Network) delete(force bool, rmLBEndpoint bool) error {
 
 	// Only remove ingress on force removal or explicit LB endpoint removal
 	if n.ingress && !force && !rmLBEndpoint {
-		return &ActiveEndpointsError{name: n.name, id: n.id}
+		return &networkbackend.ActiveEndpointsError{name: n.name, id: n.id}
 	}
 
 	if !force && n.configOnly {
@@ -1040,7 +1041,7 @@ func (n *Network) delete(force bool, rmLBEndpoint bool) error {
 	}
 	eps := c.findEndpoints(filterEndpointByNetworkId(n.id))
 	if !force && len(eps) > emptyCount {
-		return &ActiveEndpointsError{
+		return &networkbackend.ActiveEndpointsError{
 			name: n.name,
 			id:   n.id,
 			endpoints: sliceutil.Map(eps, func(ep *Endpoint) string {

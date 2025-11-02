@@ -14,7 +14,7 @@ import (
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/v2/daemon/container"
 	"github.com/moby/moby/v2/daemon/internal/idtools"
-	"github.com/moby/moby/v2/daemon/libnetwork"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	volumesservice "github.com/moby/moby/v2/daemon/volume/service"
 	"github.com/pkg/errors"
 	"gotest.tools/v3/assert"
@@ -303,7 +303,7 @@ func TestValidateContainerIsolation(t *testing.T) {
 func TestFindNetworkErrorType(t *testing.T) {
 	d := Daemon{}
 	_, err := d.FindNetwork("fakeNet")
-	var nsn libnetwork.ErrNoSuchNetwork
+	var nsn networkbackend.ErrNoSuchNetwork
 	ok := errors.As(err, &nsn)
 	if !cerrdefs.IsNotFound(err) || !ok {
 		t.Error("The FindNetwork method MUST always return an error that implements the NotFound interface and is ErrNoSuchNetwork")

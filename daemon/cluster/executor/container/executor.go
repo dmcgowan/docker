@@ -14,9 +14,9 @@ import (
 	"github.com/moby/moby/v2/daemon/cluster/convert"
 	executorpkg "github.com/moby/moby/v2/daemon/cluster/executor"
 	clustertypes "github.com/moby/moby/v2/daemon/cluster/provider"
-	"github.com/moby/moby/v2/daemon/libnetwork"
 	networktypes "github.com/moby/moby/v2/daemon/libnetwork/types"
 	"github.com/moby/moby/v2/daemon/server/filters"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	"github.com/moby/swarmkit/v2/agent"
 	"github.com/moby/swarmkit/v2/agent/exec"
 	"github.com/moby/swarmkit/v2/api"
@@ -242,8 +242,8 @@ func (e *executor) Configure(ctx context.Context, node *api.Node) error {
 	}
 
 	var (
-		activeEndpointsError *libnetwork.ActiveEndpointsError
-		errNoSuchNetwork     libnetwork.ErrNoSuchNetwork
+		activeEndpointsError *networkbackend.ActiveEndpointsError
+		errNoSuchNetwork     networkbackend.ErrNoSuchNetwork
 	)
 
 	// now, finally, remove any network LB attachments that we no longer have.

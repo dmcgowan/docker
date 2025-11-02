@@ -21,10 +21,10 @@ import (
 	"github.com/moby/moby/v2/daemon"
 	"github.com/moby/moby/v2/daemon/cluster/convert"
 	executorpkg "github.com/moby/moby/v2/daemon/cluster/executor"
-	"github.com/moby/moby/v2/daemon/libnetwork"
 	networkSettings "github.com/moby/moby/v2/daemon/network"
 	"github.com/moby/moby/v2/daemon/server/backend"
 	"github.com/moby/moby/v2/daemon/server/imagebackend"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	containerbackend "github.com/moby/moby/v2/daemon/server/router/container"
 	volumeopts "github.com/moby/moby/v2/daemon/volume/service/opts"
 	"github.com/moby/swarmkit/v2/agent/exec"
@@ -215,7 +215,7 @@ func (c *containerAdapter) createNetworks(ctx context.Context) error {
 	for name, nw := range c.container.networks {
 		ncr := networkCreateRequest(name, nw)
 		if err := c.backend.CreateManagedNetwork(ncr); err != nil { // todo name missing
-			if _, ok := err.(libnetwork.NetworkNameError); ok {
+			if _, ok := err.(networkbackend.NetworkNameError); ok {
 				continue
 			}
 			// We will continue if CreateManagedNetwork returns PredefinedNetworkError error.
@@ -232,8 +232,8 @@ func (c *containerAdapter) createNetworks(ctx context.Context) error {
 
 func (c *containerAdapter) removeNetworks(ctx context.Context) error {
 	var (
-		activeEndpointsError *libnetwork.ActiveEndpointsError
-		errNoSuchNetwork     libnetwork.ErrNoSuchNetwork
+		activeEndpointsError *networkbackend.ActiveEndpointsError
+		errNoSuchNetwork     networkbackend.ErrNoSuchNetwork
 	)
 
 	for name, nw := range c.container.networks {

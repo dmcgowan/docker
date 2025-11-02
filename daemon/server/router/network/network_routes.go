@@ -8,7 +8,6 @@ import (
 
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/v2/daemon/internal/versions"
-	"github.com/moby/moby/v2/daemon/libnetwork"
 	"github.com/moby/moby/v2/daemon/libnetwork/scope"
 	dnetwork "github.com/moby/moby/v2/daemon/network"
 	"github.com/moby/moby/v2/daemon/server/backend"
@@ -237,7 +236,7 @@ func (n *networkRouter) getNetwork(ctx context.Context, w http.ResponseWriter, r
 		return errors.Wrapf(ambiguousResultsError(term), "%d matches found based on ID prefix", len(listByPartialID))
 	}
 
-	return libnetwork.ErrNoSuchNetwork(term)
+	return networkbackend.ErrNoSuchNetwork(term)
 }
 
 func (n *networkRouter) postNetworkCreate(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -251,7 +250,7 @@ func (n *networkRouter) postNetworkCreate(ctx context.Context, w http.ResponseWr
 	}
 
 	if nws, err := n.cluster.GetNetworksByName(create.Name); err == nil && len(nws) > 0 {
-		return libnetwork.NetworkNameError(create.Name)
+		return networkbackend.NetworkNameError(create.Name)
 	}
 
 	version := httputils.VersionFromContext(ctx)
@@ -267,7 +266,7 @@ func (n *networkRouter) postNetworkCreate(ctx context.Context, w http.ResponseWr
 	// below.
 	nw, err := n.backend.CreateNetwork(ctx, create)
 	if err != nil {
-		if _, ok := err.(libnetwork.ManagerRedirectError); !ok {
+		if _, ok := err.(networkbackend.ManagerRedirectError); !ok {
 			return err
 		}
 		id, err := n.cluster.CreateNetwork(create)
@@ -429,5 +428,5 @@ func (n *networkRouter) findUniqueNetwork(term string) (network.Inspect, error) 
 		return network.Inspect{}, errdefs.InvalidParameter(errors.Errorf("network %s is ambiguous (%d matches found based on ID prefix)", term, len(listByPartialID)))
 	}
 
-	return network.Inspect{}, errdefs.NotFound(libnetwork.ErrNoSuchNetwork(term))
+	return network.Inspect{}, errdefs.NotFound(networkbackend.ErrNoSuchNetwork(term))
 }

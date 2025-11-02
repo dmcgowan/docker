@@ -1,4 +1,4 @@
-package libnetwork
+package networkbackend
 
 import (
 	"fmt"

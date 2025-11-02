@@ -8,6 +8,7 @@ import (
 	"github.com/containerd/log"
 	"github.com/moby/moby/v2/daemon/libnetwork/datastore"
 	"github.com/moby/moby/v2/daemon/libnetwork/scope"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	"go.opentelemetry.io/otel"
 )
 
@@ -17,7 +18,7 @@ func (c *Controller) getNetworkFromStore(nid string) (*Network, error) {
 			return n, nil
 		}
 	}
-	return nil, ErrNoSuchNetwork(nid)
+	return nil, networkbackend.ErrNoSuchNetwork(nid)
 }
 
 func (c *Controller) getNetworks() ([]*Network, error) {

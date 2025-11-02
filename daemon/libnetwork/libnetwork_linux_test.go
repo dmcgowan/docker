@@ -30,6 +30,7 @@ import (
 	"github.com/moby/moby/v2/daemon/libnetwork/options"
 	"github.com/moby/moby/v2/daemon/libnetwork/osl"
 	"github.com/moby/moby/v2/daemon/libnetwork/types"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	"github.com/moby/moby/v2/internal/testutil/netnsutils"
 	"github.com/moby/moby/v2/pkg/plugins"
 	"github.com/moby/sys/reexec"
@@ -220,7 +221,7 @@ func TestDeleteNetworkWithActiveEndpoints(t *testing.T) {
 	assert.NilError(t, err)
 
 	err = network.Delete()
-	var activeEndpointsError *libnetwork.ActiveEndpointsError
+	var activeEndpointsError *networkbackend.ActiveEndpointsError
 	assert.Check(t, errors.As(err, &activeEndpointsError))
 	assert.Check(t, is.ErrorContains(err, "has active endpoints"))
 	// TODO(thaJeztah): should this be [errdefs.ErrConflict] or [errdefs.ErrInvalidParameter]?
@@ -672,7 +673,7 @@ func TestEndpointDeleteWithActiveContainer(t *testing.T) {
 
 	err = ep.Delete(context.Background(), false)
 
-	var activeContainerError *libnetwork.ActiveContainerError
+	var activeContainerError *networkbackend.ActiveContainerError
 	assert.Check(t, errors.As(err, &activeContainerError))
 	assert.Check(t, is.ErrorContains(err, "has active containers"))
 	// TODO(thaJeztah): should this be [errdefs.ErrConflict] or [errdefs.ErrInvalidParameter]?

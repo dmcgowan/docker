@@ -34,6 +34,7 @@ import (
 	"github.com/moby/moby/v2/daemon/network"
 	"github.com/moby/moby/v2/daemon/pkg/opts"
 	"github.com/moby/moby/v2/daemon/server/backend"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	"github.com/moby/moby/v2/errdefs"
 	"github.com/moby/moby/v2/internal/iterutil"
 	"github.com/moby/moby/v2/internal/sliceutil"
@@ -87,9 +88,9 @@ func (daemon *Daemon) FindNetwork(term string) (*libnetwork.Network, error) {
 	}
 
 	// Be very careful to change the error type here, the
-	// libnetwork.ErrNoSuchNetwork error is used by the controller
+	// networkbackend.ErrNoSuchNetwork error is used by the controller
 	// to retry the creation of the network as managed through the swarm manager
-	return nil, errdefs.NotFound(libnetwork.ErrNoSuchNetwork(term))
+	return nil, errdefs.NotFound(networkbackend.ErrNoSuchNetwork(term))
 }
 
 // GetNetworkByID function returns a network whose ID matches the given ID.
@@ -97,7 +98,7 @@ func (daemon *Daemon) FindNetwork(term string) (*libnetwork.Network, error) {
 func (daemon *Daemon) GetNetworkByID(id string) (*libnetwork.Network, error) {
 	c := daemon.netController
 	if c == nil {
-		return nil, fmt.Errorf("netcontroller is nil: %w", libnetwork.ErrNoSuchNetwork(id))
+		return nil, fmt.Errorf("netcontroller is nil: %w", networkbackend.ErrNoSuchNetwork(id))
 	}
 	return c.NetworkByID(id)
 }
@@ -107,7 +108,7 @@ func (daemon *Daemon) GetNetworkByID(id string) (*libnetwork.Network, error) {
 func (daemon *Daemon) GetNetworkByName(name string) (*libnetwork.Network, error) {
 	c := daemon.netController
 	if c == nil {
-		return nil, libnetwork.ErrNoSuchNetwork(name)
+		return nil, networkbackend.ErrNoSuchNetwork(name)
 	}
 	if name == "" {
 		name = c.Config().DefaultNetwork
@@ -212,7 +213,7 @@ func (daemon *Daemon) setupIngress(cfg *config.Config, create *clustertypes.Netw
 	if _, err := daemon.createNetwork(ctx, cfg, create.CreateRequest, create.ID, true); err != nil {
 		// If it is any other error other than already
 		// exists error log error and return.
-		if _, ok := err.(libnetwork.NetworkNameError); !ok {
+		if _, ok := err.(networkbackend.NetworkNameError); !ok {
 			log.G(ctx).Errorf("Failed creating ingress network: %v", err)
 			return
 		}

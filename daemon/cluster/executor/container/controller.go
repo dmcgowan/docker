@@ -13,7 +13,7 @@ import (
 	"github.com/moby/moby/api/types/events"
 	"github.com/moby/moby/api/types/network"
 	executorpkg "github.com/moby/moby/v2/daemon/cluster/executor"
-	"github.com/moby/moby/v2/daemon/libnetwork"
+	"github.com/moby/moby/v2/daemon/server/networkbackend"
 	"github.com/moby/swarmkit/v2/agent/exec"
 	"github.com/moby/swarmkit/v2/api"
 	"github.com/moby/swarmkit/v2/log"
@@ -213,7 +213,7 @@ func (r *controller) Start(ctx context.Context) error {
 		return exec.ErrTaskStarted
 	}
 
-	var lnErr libnetwork.ErrNoSuchNetwork
+	var lnErr networkbackend.ErrNoSuchNetwork
 	for {
 		if err := r.adapter.start(ctx); err != nil {
 			if errors.As(err, &lnErr) {

@@ -2,8 +2,12 @@
 package ipamutils
 
 import (
+	"crypto/sha256"
+	"encoding/binary"
 	"net/netip"
 	"slices"
+
+	"github.com/moby/moby/v2/daemon/libnetwork/ipbits"
 )
 
 var (
@@ -49,4 +53,21 @@ func GetGlobalScopeDefaultNetworks() []*NetworkToSplit {
 // GetLocalScopeDefaultNetworks returns a copy of the default local-scope network list.
 func GetLocalScopeDefaultNetworks() []*NetworkToSplit {
 	return slices.Clone(localScopeDefaultNetworks)
+}
+
+// DeriveULABaseNetwork derives a Global ID from the provided hostID and
+// appends it to the ULA prefix (with L bit set) to generate a ULA prefix
+// unique to this host. The returned NetworkToSplit is stable over time if
+// hostID doesn't change.
+//
+// This is loosely based on the algorithm described in https://datatracker.ietf.org/doc/html/rfc4193#section-3.2.2.
+func DeriveULABaseNetwork(hostID string) *NetworkToSplit {
+	sha := sha256.Sum256([]byte(hostID))
+	gid := binary.BigEndian.Uint64(sha[:]) & (1<<40 - 1) // Keep the 40 least significant bits.
+	addr := ipbits.Add(netip.MustParseAddr("fd00::"), gid, 80)
+
+	return &NetworkToSplit{
+		Base: netip.PrefixFrom(addr, 48),
+		Size: 64,
+	}
 }

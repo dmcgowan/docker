@@ -7,12 +7,9 @@ package daemon
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/binary"
 	"fmt"
 	"maps"
 	"net"
-	"net/netip"
 	"os"
 	"path"
 	"path/filepath"
@@ -72,7 +69,6 @@ import (
 	"github.com/moby/moby/v2/daemon/libnetwork/cluster"
 	nwconfig "github.com/moby/moby/v2/daemon/libnetwork/config"
 	"github.com/moby/moby/v2/daemon/libnetwork/ipamutils"
-	"github.com/moby/moby/v2/daemon/libnetwork/ipbits"
 	dlogger "github.com/moby/moby/v2/daemon/logger"
 	"github.com/moby/moby/v2/daemon/network"
 	"github.com/moby/moby/v2/daemon/pkg/plugin"
@@ -1638,7 +1634,7 @@ func (daemon *Daemon) networkOptions(conf *config.Config, pg plugingetter.Plugin
 	if !slices.ContainsFunc(defaultAddressPools, func(nw *ipamutils.NetworkToSplit) bool {
 		return nw.Base.Addr().Is6() && !nw.Base.Addr().Is4In6()
 	}) {
-		defaultAddressPools = append(defaultAddressPools, deriveULABaseNetwork(hostID))
+		defaultAddressPools = append(defaultAddressPools, ipamutils.DeriveULABaseNetwork(hostID))
 	}
 	options = append(options, nwconfig.OptionDefaultAddressPoolConfig(defaultAddressPools))
 
@@ -1650,23 +1646,6 @@ func (daemon *Daemon) networkOptions(conf *config.Config, pg plugingetter.Plugin
 	}
 
 	return options, nil
-}
-
-// deriveULABaseNetwork derives a Global ID from the provided hostID and
-// appends it to the ULA prefix (with L bit set) to generate a ULA prefix
-// unique to this host. The returned ipamutils.NetworkToSplit is stable over
-// time if hostID doesn't change.
-//
-// This is loosely based on the algorithm described in https://datatracker.ietf.org/doc/html/rfc4193#section-3.2.2.
-func deriveULABaseNetwork(hostID string) *ipamutils.NetworkToSplit {
-	sha := sha256.Sum256([]byte(hostID))
-	gid := binary.BigEndian.Uint64(sha[:]) & (1<<40 - 1) // Keep the 40 least significant bits.
-	addr := ipbits.Add(netip.MustParseAddr("fd00::"), gid, 80)
-
-	return &ipamutils.NetworkToSplit{
-		Base: netip.PrefixFrom(addr, 48),
-		Size: 64,
-	}
 }
 
 // GetCluster returns the cluster

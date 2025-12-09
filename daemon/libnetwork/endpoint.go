@@ -906,7 +906,7 @@ func (ep *Endpoint) Delete(ctx context.Context, force bool) error {
 
 	if sb, _ := n.getController().SandboxByID(sbid); sb != nil {
 		if !force {
-			return &networkbackend.ActiveContainerError{name: name, id: epid}
+			return networkbackend.NewActiveContainerError(name, epid)
 		}
 		func() {
 			// Make sure this Delete isn't racing a Join/Leave/Delete that might also be

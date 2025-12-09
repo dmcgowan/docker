@@ -33,6 +33,14 @@ type ActiveEndpointsError struct {
 	endpoints []string
 }
 
+func NewActiveEndpointsError(name, id string, endpoints []string) *ActiveEndpointsError {
+	return &ActiveEndpointsError{
+		name:      name,
+		id:        id,
+		endpoints: endpoints,
+	}
+}
+
 func (aee *ActiveEndpointsError) Error() string {
 	return fmt.Sprintf("network %s has active endpoints (%s)", aee.name, strings.Join(aee.endpoints, ", "))
 }
@@ -45,6 +53,13 @@ func (aee *ActiveEndpointsError) Forbidden() {}
 type ActiveContainerError struct {
 	name string
 	id   string
+}
+
+func NewActiveContainerError(name, id string) *ActiveContainerError {
+	return &ActiveContainerError{
+		name: name,
+		id:   id,
+	}
 }
 
 func (ace *ActiveContainerError) Error() string {
